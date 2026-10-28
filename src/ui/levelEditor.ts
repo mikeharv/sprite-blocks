@@ -234,6 +234,7 @@ export class LevelEditor {
     };
     this.palette.replaceChildren(
       button(ERASER, 'Eraser'),
+      ...(ids.length ? [] : [el('p', { className: 'palette-empty', textContent: 'No sprites yet. Add some to paint with.' })]),
       ...SPRITE_CLASSES.flatMap((c) => {
         const items = ids.filter((id) => getSprite(id)?.cls === c.id);
         if (!items.length) return [];

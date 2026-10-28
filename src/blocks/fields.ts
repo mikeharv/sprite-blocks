@@ -1,6 +1,6 @@
 // Custom Blockly fields. Each is registered so blocks can reference it from standard JSON definitions.
 import * as Blockly from 'blockly/core';
-import { ASSETS, SOUNDS, getAsset, getSprite, thumbUrl } from '../assets';
+import { SOUNDS, getAsset, getSprite, thumbUrl } from '../assets';
 import { SPRITE_CLASSES, parseCellKey } from '../model';
 import { state } from '../state';
 import { pathNames } from './path_registry';
@@ -248,8 +248,8 @@ export function registerFields(): void {
   Blockly.fieldRegistry.register('field_grid_location', FieldGridLocation);
 }
 
-/** Default asset for new blocks: first project sprite of a class, falling back to the first sprite. */
+/** Default asset for new blocks: first project sprite of a class, then any project sprite, else none. */
 export function defaultAsset(cls?: string): string {
   const ids = state.spriteAssetIds;
-  return ids.find((id) => getSprite(id)?.cls === cls) ?? ids[0] ?? ASSETS[0].id;
+  return ids.find((id) => getSprite(id)?.cls === cls) ?? ids[0] ?? '';
 }

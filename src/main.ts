@@ -24,6 +24,7 @@ import {
   saveProject,
 } from './storage';
 import { LevelEditor } from './ui/levelEditor';
+import { startTour } from './ui/tour';
 import { AssetLibrary } from './ui/library';
 import { el, openModal, toast } from './ui/modal';
 import {
@@ -224,10 +225,26 @@ $('btn-new').addEventListener('click', () => {
     [
       { label: 'Cancel' },
       { label: 'Example: Coin Run', onClick: choose(exampleProject) },
-      { label: 'Blank game', primary: true, onClick: choose(() => blankProject()) },
+      {
+        label: 'Blank game',
+        primary: true,
+        onClick: () => {
+          if (choose(() => blankProject())() === false) return false;
+          setTimeout(() => offerTour('Your new game is empty. Want a quick tour of how to build it, step by step?'));
+        },
+      },
     ],
   );
 });
+
+$('btn-tour').addEventListener('click', () => startTour());
+
+function offerTour(message: string): void {
+  openModal('Take the tour?', el('p', { textContent: message }), [
+    { label: 'No thanks' },
+    { label: 'Take the tour', primary: true, onClick: () => void setTimeout(startTour) },
+  ]);
+}
 
 $('btn-save').addEventListener('click', () => {
   const name = (nameInput.value.trim() || 'My Game').slice(0, 80);
@@ -322,3 +339,10 @@ try {
   initial = null;
 }
 openProject(initial ?? exampleProject(), null);
+
+// Offer the tour once, to first-time visitors.
+const TOUR_OFFERED_KEY = 'spriteblocks:tourOffered';
+if (!initial && !localStorage.getItem(TOUR_OFFERED_KEY)) {
+  localStorage.setItem(TOUR_OFFERED_KEY, '1');
+  offerTour('Welcome! This example game shows what you can make. Want a one-minute tour of how games are built here?');
+}

@@ -1,6 +1,6 @@
 // The built-in example game and the template for new projects.
 import type { Level, Project } from './model';
-import { cellKey, newLevel, uid } from './model';
+import { cellKey, newLevel } from './model';
 
 const DEFAULT_ASSETS = [
   'alien_green', 'hero', 'plane_blue',
@@ -201,17 +201,14 @@ export function exampleProject(): Project {
   };
 }
 
+/** A new game starts empty: the player picks sprites on the Sprites tab and builds the level from them. */
 export function blankProject(name = 'My Game'): Project {
-  const level = newLevel('Level 1');
-  for (let x = 0; x < level.cols; x++) level.cells[cellKey(x, level.rows - 1)] = 'grass';
-  level.cells[cellKey(1, level.rows - 2)] = 'alien_green';
-  level.id = uid('level');
   return {
     format: 'sprite-blocks',
     version: 1,
     name,
-    assets: [...DEFAULT_ASSETS],
-    levels: [level],
+    assets: [],
+    levels: [{ ...newLevel('Level 1'), background: null }],
     main: {},
     paths: examplePaths(),
   };

@@ -307,3 +307,30 @@ body {
 .library-card .costumes { display: flex; gap: 2px; }
 .library-card .costumes img { width: 18px; height: 18px; }
 .sound-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------------------------------------------------------------- tour */
+
+.tour-layer { position: fixed; inset: 0; z-index: 1500; }
+.tour-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px #ffd34d, 0 0 0 9999px rgba(15, 22, 35, 0.55);
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+.tour-card {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 16px 18px 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+  transition: left 0.25s ease, top 0.25s ease;
+}
+.tour-layer.centered .tour-card { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); }
+.tour-card h3 { margin: 0 0 8px; font-size: 17px; }
+.tour-card p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: #344054; }
+.tour-actions { display: flex; align-items: center; gap: 6px; }
+.tour-progress { font-size: 12px; color: var(--muted); }
+.tour-skip { border: none; background: none; color: var(--muted); }
+.palette-empty { font-size: 12px; color: var(--muted); margin: 8px 2px; line-height: 1.4; }

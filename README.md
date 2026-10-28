@@ -33,6 +33,8 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 
 ### Program flow
 
+* **Getting started:** first-time visitors and new blank games are offered a short guided tour of the tabs. The
+  **Tour** button in the header replays it. A blank game starts with no sprites.
 * **Sprites** are added from the built-in library on the Sprites tab. The tabs follow the usual order of making a
   game: Sprites, Levels, Code, Paths.
 * **Levels** are edited in a DOM grid (Levels tab). When a game runs, each level becomes hidden setup code
