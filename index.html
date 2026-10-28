@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='3' fill='%233f8fd6'/><rect x='4' y='4' width='8' height='8' fill='%23ffd34d'/></svg>" />
+    <title>Sprite Blocks</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="logo"></span>Sprite Blocks</div>
+      <label class="project-name">
+        <span class="sr-only">Project name</span>
+        <input id="project-name" type="text" spellcheck="false" />
+      </label>
+      <nav class="file-actions">
+        <button class="btn" id="btn-new" type="button">New</button>
+        <button class="btn" id="btn-load" type="button">Open…</button>
+        <button class="btn primary" id="btn-save" type="button">Save</button>
+        <button class="btn" id="btn-import" type="button">Import</button>
+        <button class="btn" id="btn-export" type="button">Export</button>
+      </nav>
+      <span class="spacer"></span>
+      <span id="save-state" class="save-state"></span>
+    </header>
+
+    <main class="app" id="app">
+      <section class="editor-pane">
+        <nav class="tabs" role="tablist">
+          <button class="tab" data-tab="sprites" role="tab" type="button">Sprites</button>
+          <button class="tab" data-tab="level" role="tab" type="button">Levels</button>
+          <button class="tab active" data-tab="code" role="tab" type="button">Code</button>
+          <button class="tab" id="tab-paths" role="tab" type="button">Paths</button>
+        </nav>
+        <div class="tab-view" id="sprites-view"></div>
+        <div class="tab-view" id="level-view"></div>
+        <div class="tab-view active" id="code-view"><div id="blockly-main" class="blockly-host"></div></div>
+      </section>
+
+      <section class="game-pane">
+        <div class="game-toolbar">
+          <button class="btn run" id="btn-run" type="button">▶ Run</button>
+          <button class="btn" id="btn-stop" type="button" disabled>■ Stop</button>
+          <span class="spacer"></span>
+          <button class="btn icon" id="btn-show-code" type="button" title="Show generated code">{ }</button>
+          <button class="btn icon" id="btn-expand" type="button" title="Expand game">⤢</button>
+        </div>
+        <div id="game" class="game" tabindex="0" aria-label="Game"></div>
+        <div id="game-error" class="game-error" hidden></div>
+        <div class="game-help">
+          <b>Platformer:</b> ←/→ or A/D move, ↑/W/Space jump. <b>Top-down:</b> arrows or WASD.
+        </div>
+      </section>
+    </main>
+
+    <div id="paths-modal" class="paths-modal" aria-hidden="true">
+      <div class="paths-card" role="dialog" aria-label="Path editor">
+        <header class="modal-header">
+          <h2>Paths</h2>
+          <p class="hint">
+            Each path is a list of grid moves. Assign paths to sprites with the “set path” block on the Code tab.
+          </p>
+          <button class="btn primary" id="btn-paths-done" type="button">Done</button>
+        </header>
+        <div id="blockly-paths" class="blockly-host"></div>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
