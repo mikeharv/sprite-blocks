@@ -1,11 +1,46 @@
 // Level editor: a scrollable DOM grid for placing sprites, plus level list and settings.
-import { getAsset, getSprite, thumbUrl } from '../assets';
+import { BACKGROUNDS, getAsset, getBackground, getSprite, imageUrl, thumbUrl } from '../assets';
 import type { GameMode, Level, ViewSize } from '../model';
-import { SPRITE_CLASSES, cellKey, newLevel, parseCellKey, uid, viewCols } from '../model';
+import { BACKGROUND_COLORS, SPRITE_CLASSES, cellKey, newLevel, parseCellKey, uid, viewCols } from '../model';
 import { state } from '../state';
-import { el } from './modal';
+import { confirmDialog, el, promptDialog } from './modal';
 
 const ERASER = '__eraser__';
+
+/** A small picture of a background and a note on how it behaves. */
+function backgroundPreview(id: string): HTMLElement {
+  const bg = getBackground(id)!;
+  const layer = (img: string | undefined, className: string) => {
+    const div = el('div', { className });
+    if (img) div.style.backgroundImage = `url(${imageUrl(img)})`;
+    if (bg.tint) {
+      div.style.backgroundColor = bg.tint;
+      div.style.backgroundBlendMode = 'multiply';
+    }
+    return div;
+  };
+  // The horizon strip alternates its tiles, as in the game.
+  const tiles = bg.strip ?? [];
+  const strip = el(
+    'div',
+    { className: 'bg-strip' },
+    Array.from({ length: 4 }, (_, i) => layer(tiles[i % tiles.length], 'bg-strip-tile')),
+  );
+  const picture =
+    bg.type === 'tile'
+      ? el('div', { className: 'bg-preview' }, [layer(bg.tile, 'bg-tile')])
+      : el('div', { className: 'bg-preview' }, [layer(bg.sky, 'bg-sky'), strip, layer(bg.ground, 'bg-ground')]);
+  return el('div', { className: 'bg-info' }, [
+    picture,
+    el('span', {
+      className: 'bg-note',
+      textContent:
+        bg.type === 'tile'
+          ? 'Floor: covers the whole level. Good for top-down games.'
+          : 'Sky: scrolls slowly behind the level for a sense of depth. Good for platformers.',
+    }),
+  ]);
+}
 const MAX_SIZE = 200;
 
 export class LevelEditor {
@@ -110,6 +145,8 @@ export class LevelEditor {
   private addLevel(): void {
     const lvl = newLevel(`Level ${state.project.levels.length + 1}`, this.level.mode);
     lvl.background = this.level.background;
+    lvl.color = this.level.color;
+    lvl.player = this.level.player;
     state.project.levels.splice(state.currentLevelIndex + 1, 0, lvl);
     state.currentLevelIndex++;
     this.changed('levels');
@@ -122,16 +159,27 @@ export class LevelEditor {
     this.changed('levels');
   }
 
-  private rename(): void {
-    const name = prompt('Level name', this.level.name)?.trim();
+  private async rename(): Promise<void> {
+    const name = await promptDialog({
+      title: 'Rename level',
+      label: 'Level name',
+      value: this.level.name,
+      confirmLabel: 'Rename',
+    });
     if (!name) return;
     this.level.name = name;
     this.changed('levels');
   }
 
-  private deleteLevel(): void {
+  private async deleteLevel(): Promise<void> {
     if (state.project.levels.length <= 1) return;
-    if (!confirm(`Delete “${this.level.name}”?`)) return;
+    const ok = await confirmDialog({
+      title: 'Delete level?',
+      message: `Delete “${this.level.name}” and everything placed in it?`,
+      confirmLabel: 'Delete level',
+      danger: true,
+    });
+    if (!ok) return;
     state.project.levels.splice(state.currentLevelIndex, 1);
     state.currentLevelIndex = Math.min(state.currentLevelIndex, state.project.levels.length - 1);
     this.changed('levels');
@@ -178,14 +226,27 @@ export class LevelEditor {
     view.value = String(lvl.view);
     view.addEventListener('change', () => {
       lvl.view = Number(view.value) as ViewSize;
+      this.updateCameraBox();
       this.changed();
     });
 
-    const bg = el('select', { className: 'select' }, [el('option', { value: '', textContent: '(plain)' })]);
-    for (const id of state.backgroundAssetIds) bg.append(el('option', { value: id, textContent: getAsset(id)!.name }));
+    const group = (label: string, type: 'scenic' | 'tile') =>
+      el(
+        'optgroup',
+        { label },
+        BACKGROUNDS.filter((b) => b.type === type).map((b) => el('option', { value: b.id, textContent: b.name })),
+      );
+    const bg = el('select', { className: 'select' }, [
+      el('option', { value: '', textContent: '(color)' }),
+      group('Skies: scenery that scrolls behind', 'scenic'),
+      group('Floors: a tile that covers the level', 'tile'),
+    ]);
     bg.value = lvl.background ?? '';
     bg.addEventListener('change', () => {
       lvl.background = bg.value || null;
+      if (!lvl.background) lvl.color ??= BACKGROUND_COLORS[0];
+      this.renderSettings();
+      this.renderGridBackground();
       this.changed();
     });
 
@@ -195,16 +256,48 @@ export class LevelEditor {
       size('Height', lvl.rows, (n) => this.resize(lvl.cols, n)),
       el('label', { className: 'field' }, ['Camera', view]),
       el('label', { className: 'field' }, ['Background', bg]),
+      ...(lvl.background ? [backgroundPreview(lvl.background)] : [this.colorPicker()]),
     );
   }
 
-  private resize(cols: number, rows: number): void {
+  /** Curated swatches for a plain background colour. */
+  private colorPicker(): HTMLElement {
+    const lvl = this.level;
+    const current = lvl.color ?? BACKGROUND_COLORS[0];
+    return el(
+      'div',
+      { className: 'swatches', role: 'radiogroup', ariaLabel: 'Background color' },
+      BACKGROUND_COLORS.map((color) => {
+        const b = el('button', { className: 'swatch', type: 'button', title: color });
+        b.style.background = color;
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(color === current));
+        b.addEventListener('click', () => {
+          lvl.color = color;
+          this.renderSettings();
+          this.renderGridBackground();
+          this.changed();
+        });
+        return b;
+      }),
+    );
+  }
+
+  private async resize(cols: number, rows: number): Promise<void> {
     const lvl = this.level;
     const lost = Object.keys(lvl.cells).filter((k) => {
       const [x, y] = parseCellKey(k);
       return x >= cols || y >= rows;
     });
-    if (lost.length && !confirm(`Shrinking the level removes ${lost.length} sprite(s) outside the new size. Continue?`)) {
+    const ok =
+      !lost.length ||
+      (await confirmDialog({
+        title: 'Shrink level?',
+        message: `${lost.length} sprite${lost.length === 1 ? ' is' : 's are'} outside the new size and will be removed.`,
+        confirmLabel: 'Shrink and remove',
+        danger: true,
+      }));
+    if (!ok) {
       this.renderSettings();
       return;
     }
@@ -223,7 +316,7 @@ export class LevelEditor {
     const button = (id: string, label: string, img?: string) => {
       const b = el('button', { className: 'palette-item', type: 'button', title: label }, [
         img ? el('img', { src: img, alt: '' }) : el('span', { className: 'eraser-icon', textContent: '⌫' }),
-        el('span', { textContent: label }),
+        el('span', { className: 'palette-name', textContent: label }),
       ]);
       b.classList.toggle('active', this.brush === id);
       b.addEventListener('click', () => {
@@ -232,24 +325,42 @@ export class LevelEditor {
       });
       return b;
     };
+    /** Characters get a star: the starred one is this level's player. */
+    const character = (id: string) => {
+      const isPlayer = this.level.player === id;
+      const star = el('button', {
+        className: 'player-star' + (isPlayer ? ' on' : ''),
+        type: 'button',
+        textContent: isPlayer ? '★' : '☆',
+        title: isPlayer ? 'This is the player in this level' : 'Make this the player in this level',
+      });
+      star.setAttribute('aria-pressed', String(isPlayer));
+      star.addEventListener('click', () => this.setPlayer(isPlayer ? null : id));
+      return el('div', { className: 'palette-row' }, [button(id, getAsset(id)!.name, thumbUrl(getAsset(id)!)), star]);
+    };
     this.palette.replaceChildren(
       button(ERASER, 'Eraser'),
-      ...(ids.length ? [] : [el('p', { className: 'palette-empty', textContent: 'No sprites yet. Add some to paint with.' })]),
+      ...(ids.length
+        ? []
+        : [el('p', { className: 'palette-empty', textContent: 'No sprites yet. Add some on the Sprites tab.' })]),
       ...SPRITE_CLASSES.flatMap((c) => {
         const items = ids.filter((id) => getSprite(id)?.cls === c.id);
         if (!items.length) return [];
         return [
           el('div', { className: 'palette-heading', textContent: c.plural }),
-          ...items.map((id) => button(id, getAsset(id)!.name, thumbUrl(getAsset(id)!))),
+          ...items.map((id) =>
+            c.id === 'character' ? character(id) : button(id, getAsset(id)!.name, thumbUrl(getAsset(id)!)),
+          ),
         ];
       }),
-      el('button', {
-        className: 'btn small add-assets',
-        textContent: '+ Add sprites…',
-        type: 'button',
-        onclick: () => document.querySelector<HTMLElement>('.tab[data-tab="sprites"]')?.click(),
-      }),
     );
+  }
+
+  private setPlayer(id: string | null): void {
+    this.level.player = id;
+    this.renderPalette();
+    this.renderGrid();
+    this.changed();
   }
 
   // ---------------------------------------------------------------- grid
@@ -261,8 +372,7 @@ export class LevelEditor {
     this.grid.style.gridTemplateColumns = `repeat(${lvl.cols}, ${s}px)`;
     this.grid.style.gridAutoRows = `${s}px`;
     this.grid.style.setProperty('--cell', s + 'px');
-    const bg = getAsset(lvl.background);
-    this.grid.style.backgroundColor = bg?.kind === 'background' ? bg.color : '#9fd8f0';
+    this.renderGridBackground();
     this.cells = [];
     const frag = document.createDocumentFragment();
     for (let y = 0; y < lvl.rows; y++) {
@@ -280,10 +390,25 @@ export class LevelEditor {
     this.status.textContent = this.statusText();
   }
 
+  /** Shows the level's background behind the grid: floors tile per space, scenic skies tile their sky. */
+  private renderGridBackground(): void {
+    const lvl = this.level;
+    const bg = getBackground(lvl.background);
+    const style = this.grid.style;
+    style.backgroundColor = bg?.color ?? lvl.color ?? BACKGROUND_COLORS[0];
+    const tile = bg?.type === 'tile' ? bg.tile : bg?.sky;
+    style.backgroundImage = tile ? `url(${imageUrl(tile)})` : '';
+    style.backgroundSize = bg?.type === 'tile' ? `${this.cellSize}px` : `${this.cellSize * 3}px`;
+    // Tinted skies (sunset, night) multiply their colour over the art, as the game does.
+    if (bg?.tint) style.backgroundColor = bg.tint;
+    style.backgroundBlendMode = bg?.tint ? 'multiply' : '';
+  }
+
   private paintCell(cell: HTMLElement, assetId: string | undefined): void {
     const asset = getAsset(assetId);
     cell.style.backgroundImage = asset ? `url(${thumbUrl(asset)})` : '';
-    cell.title = asset ? asset.name : '';
+    cell.title = asset ? asset.name + (assetId === this.level.player ? ' (player)' : '') : '';
+    cell.classList.toggle('player', !!assetId && assetId === this.level.player);
   }
 
   /** Outline showing what the camera sees at the start of the level. */
@@ -291,7 +416,7 @@ export class LevelEditor {
     const lvl = this.level;
     const vw = viewCols(lvl.view);
     const vh = lvl.view;
-    const playerKey = Object.keys(lvl.cells).find((k) => getSprite(lvl.cells[k])?.cls === 'player');
+    const playerKey = Object.keys(lvl.cells).find((k) => lvl.player && lvl.cells[k] === lvl.player);
     const [px, py] = playerKey ? parseCellKey(playerKey) : [0, lvl.rows - 1];
     const left = lvl.cols <= vw ? 0 : Math.max(0, Math.min(lvl.cols - vw, px + 0.5 - vw / 2));
     const top = lvl.rows <= vh ? 0 : Math.max(0, Math.min(lvl.rows - vh, py + 0.5 - vh / 2));
@@ -344,6 +469,11 @@ export class LevelEditor {
     if (lvl.cells[key] === value) return;
     if (value) lvl.cells[key] = value;
     else delete lvl.cells[key];
+    // The first character painted into a level without a player becomes the player.
+    if (value && !lvl.player && getSprite(value)?.cls === 'character') {
+      lvl.player = value;
+      this.renderPalette();
+    }
     this.paintCell(this.cells[y * lvl.cols + x], value);
     this.dirty = true;
   }
@@ -361,6 +491,9 @@ export class LevelEditor {
 
   private statusText(): string {
     const n = Object.keys(this.level.cells).length;
-    return `${this.level.cols}×${this.level.rows} spaces · ${n} sprites · Drag to paint, right-click or use the eraser to remove.`;
+    return (
+      `${this.level.cols}×${this.level.rows} spaces · ${n} sprites · Drag to paint, right-click or use the eraser ` +
+      'to remove. ★ marks the player.'
+    );
   }
 }

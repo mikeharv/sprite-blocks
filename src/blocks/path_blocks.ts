@@ -34,14 +34,36 @@ export const PATH_BLOCKS = [
     type: 'sb_path_move',
     message0: 'move %1 %2 spaces',
     args0: [
-      { type: 'field_dropdown', name: 'DIR', options: DIRECTIONS },
+      { type: 'field_dropdown', name: 'DIR', options: [...DIRECTIONS, ['forward', 'forward']] },
       { type: 'input_value', name: 'N', check: 'Number' },
     ],
     inputsInline: true,
     previousStatement: null,
     nextStatement: null,
     style: 'path_blocks',
-    tooltip: 'Moves one grid space at a time. Stops early if an obstacle (or a platform edge) is in the way.',
+    tooltip:
+      'Moves one grid space at a time. Stops early if an obstacle (or a platform edge) is in the way. ' +
+      '“forward” is the way the sprite is facing.',
+  },
+  {
+    type: 'sb_path_throw',
+    message0: 'throw %1 with path %2',
+    args0: [
+      { type: 'field_sprite_asset', name: 'ASSET' },
+      { type: 'field_path', name: 'PATH' },
+    ],
+    inputsInline: true,
+    previousStatement: null,
+    nextStatement: null,
+    style: 'path_blocks',
+    tooltip: 'Creates a sprite in the space in front of this one, facing the same way, and starts a path on it.',
+  },
+  {
+    type: 'sb_path_disappear',
+    message0: 'disappear',
+    previousStatement: null,
+    style: 'path_blocks',
+    tooltip: 'Removes this sprite, for example when a thrown sprite has gone far enough.',
   },
   {
     type: 'sb_path_move_toward',
@@ -136,6 +158,9 @@ const generators: Record<string, (b: Blockly.Block, g: JavascriptGenerator) => s
   sb_path_move_toward: (b, g) => `yield* $p.moveToward('player', ${n(b, g)});\n`,
   sb_path_jump: (b, g) => `yield* $p.jump(${n(b, g)});\n`,
   sb_path_wait: (b, g) => `yield* $p.wait(${n(b, g)});\n`,
+  sb_path_throw: (b) =>
+    `$p.throw(${JSON.stringify(String(b.getFieldValue('ASSET')))}, ${JSON.stringify(String(b.getFieldValue('PATH')))});\n`,
+  sb_path_disappear: () => '$p.disappear();\nreturn;\n',
   sb_path_face: (b) => `$p.face(${dir(b)});\n`,
   sb_path_speed: (b) => `$p.setSpeed(${Number(b.getFieldValue('SPEED'))});\n`,
   sb_path_can_move: (b) => [`$p.canMove(${dir(b)})`, Order.FUNCTION_CALL],

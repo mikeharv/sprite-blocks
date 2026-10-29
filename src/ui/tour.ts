@@ -23,9 +23,8 @@ const STEPS: TourStep[] = [
     tab: 'sprites',
     target: '.editor-pane',
     text:
-      'Start by adding sprites and backgrounds to your project. Each sprite has a class that decides how it ' +
-      'behaves: players are controlled with the keyboard, platforms and obstacles are solid, and collectibles, ' +
-      'hazards and goals do whatever your rules say. You can preview sounds at the bottom.',
+      'Start by adding sprites and sounds to your project. Characters move around, platforms can be jumped ' +
+      'through from below, obstacles are solid, and items do whatever your rules say. Click a sound to hear it.',
   },
   {
     title: '2. Levels',
@@ -33,24 +32,26 @@ const STEPS: TourStep[] = [
     target: '.editor-pane',
     text:
       'Pick a sprite from the palette and click or drag across the grid to place it; use the eraser or ' +
-      'right-click to remove. Choose platformer or top-down, the level size, the camera size and a ' +
-      'background. Add more levels with “+ Level”. The dashed box shows what the camera sees.',
+      'right-click to remove. The ★ next to a character makes it the player. Choose platformer or top-down, ' +
+      'the size, the camera and a background. The dashed box shows what the camera sees.',
   },
   {
-    title: '3. Code',
-    tab: 'code',
+    title: '3. Rules',
+    tab: 'rules',
     target: '.editor-pane',
     text:
-      'Rules go here. Start with an Events block such as “when player touches coin”, then add actions: ' +
+      'Rules go here. Start with an Events block such as “when the player touches coin”, then add actions: ' +
       'remove “other sprite”, change the score, play a sound, go to the next level… Blocks that aren’t ' +
       'inside an event don’t run.',
   },
   {
     title: '4. Paths',
-    target: '#tab-paths',
+    tab: 'paths',
+    target: '.editor-pane',
     text:
-      'Paths make sprites move by themselves, like an enemy that patrols or a coin that bobs. Build them ' +
-      'from move blocks on the Paths tab, then use “set path” on the Code tab to give them to sprites.',
+      'Paths make sprites move by themselves, like an enemy that patrols, a coin that bobs or a sparkle ' +
+      'that flies forward. Build them from move blocks here, then use “set path” on the Rules tab to give ' +
+      'them to sprites.',
   },
   {
     title: 'Run and play',
@@ -64,7 +65,7 @@ const STEPS: TourStep[] = [
     target: '.file-actions',
     text:
       'Your game is autosaved in this browser, but give it a name and press Save to keep versions you can ' +
-      'Open later. Export downloads a file you can share; Import loads one. New starts over or opens the ' +
+      'Open later. Export downloads a file you can share; Import loads one. New starts over or opens an ' +
       'example game. You can replay this tour with the Tour button.',
   },
 ];

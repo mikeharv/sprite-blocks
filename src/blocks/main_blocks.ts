@@ -20,7 +20,8 @@ const KEYS = [
 ];
 
 const sprite = (name = 'SPRITE') => ({ type: 'input_value', name, check: ['Sprite', 'Array'] });
-const selector = (name = 'SELECTOR', value = 'class:player') => ({ type: 'field_sprite_selector', name, value });
+const location = (name = 'LOC') => ({ type: 'input_value', name, check: 'Location' });
+const selector = (name = 'SELECTOR', value = 'player') => ({ type: 'field_sprite_selector', name, value });
 const number = (name: string) => ({ type: 'input_value', name, check: 'Number' });
 
 export const MAIN_BLOCKS = [
@@ -62,8 +63,8 @@ export const MAIN_BLOCKS = [
     type: 'sb_when_touch',
     message0: 'when %1 touches %2 %3 %4',
     args0: [
-      selector('A', 'class:player'),
-      selector('B', 'class:collectible'),
+      selector('A', 'player'),
+      selector('B', 'class:item'),
       { type: 'input_dummy' },
       { type: 'input_statement', name: 'DO' },
     ],
@@ -74,8 +75,8 @@ export const MAIN_BLOCKS = [
     type: 'sb_while_touch',
     message0: 'while %1 is touching %2 %3 %4',
     args0: [
-      selector('A', 'class:player'),
-      selector('B', 'class:hazard'),
+      selector('A', 'player'),
+      selector('B', 'class:character'),
       { type: 'input_dummy' },
       { type: 'input_statement', name: 'DO' },
     ],
@@ -85,7 +86,7 @@ export const MAIN_BLOCKS = [
   {
     type: 'sb_when_clicked',
     message0: 'when %1 is clicked %2 %3',
-    args0: [selector('SELECTOR', 'class:player'), { type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }],
+    args0: [selector('SELECTOR', 'player'), { type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }],
     style: 'event_blocks',
     tooltip: 'Runs when a sprite is clicked. Use “this sprite” inside.',
   },
@@ -113,7 +114,75 @@ export const MAIN_BLOCKS = [
     tooltip: 'In a touch event: the sprite that was touched.',
   },
 
+  // ---------------------------------------------------------------- Locations
+  {
+    type: 'sb_location',
+    message0: '%1',
+    args0: [{ type: 'field_grid_location', name: 'LOC', value: '0,0' }],
+    output: 'Location',
+    style: 'sprite_blocks',
+    tooltip: 'A space in the level. Click to pick it on a map of the level being edited.',
+  },
+  {
+    type: 'sb_location_of',
+    message0: 'location of %1',
+    args0: [sprite()],
+    output: 'Location',
+    style: 'sprite_blocks',
+    tooltip: 'The space a sprite is in. With several sprites, every one of their spaces.',
+  },
+  {
+    type: 'sb_location_relative',
+    message0: '%1 spaces %2 of %3',
+    args0: [number('N'), { type: 'field_dropdown', name: 'DIR', options: DIRECTIONS }, sprite()],
+    inputsInline: true,
+    output: 'Location',
+    style: 'sprite_blocks',
+    tooltip: 'A space a number of steps away from a sprite.',
+  },
+
   // ---------------------------------------------------------------- Sprites
+  {
+    type: 'sb_create',
+    message0: 'create %1 at %2',
+    args0: [{ type: 'field_sprite_asset', name: 'ASSET' }, location()],
+    inputsInline: true,
+    previousStatement: null,
+    nextStatement: null,
+    style: 'sprite_blocks',
+    tooltip: 'Creates a sprite at a location. Nothing is created outside the level.',
+  },
+  {
+    type: 'sb_move_to_location',
+    message0: 'move %1 to %2',
+    args0: [sprite(), location()],
+    inputsInline: true,
+    previousStatement: null,
+    nextStatement: null,
+    style: 'sprite_blocks',
+  },
+  {
+    type: 'sb_throw',
+    message0: 'make %1 throw %2 with path %3',
+    args0: [sprite(), { type: 'field_sprite_asset', name: 'ASSET' }, { type: 'field_path', name: 'PATH' }],
+    inputsInline: true,
+    previousStatement: null,
+    nextStatement: null,
+    style: 'sprite_blocks',
+    tooltip:
+      'Creates a sprite in the space in front of the thrower, facing the same way, and starts a path on it. ' +
+      'Try a path that moves forward and then disappears.',
+  },
+  {
+    type: 'sb_make_player',
+    message0: 'make %1 the player',
+    args0: [sprite()],
+    previousStatement: null,
+    nextStatement: null,
+    style: 'sprite_blocks',
+    tooltip: 'Gives keyboard control to a character. The old player becomes an ordinary character.',
+  },
+  // Older creation and movement blocks, kept so saved games still load. Not in the toolbox.
   {
     type: 'sb_create_at',
     message0: 'create %1 at %2',
@@ -164,7 +233,7 @@ export const MAIN_BLOCKS = [
     previousStatement: null,
     nextStatement: null,
     style: 'sprite_blocks',
-    tooltip: 'Changes how a sprite looks. Its class (player, hazard…) changes to match the new costume.',
+    tooltip: 'Changes how a sprite looks. Its class (character, item…) changes to match the new costume.',
   },
   {
     type: 'sb_move_to',
@@ -177,8 +246,16 @@ export const MAIN_BLOCKS = [
   },
   {
     type: 'sb_bounce',
-    message0: 'make %1 bounce',
-    args0: [sprite()],
+    message0: 'make %1 bounce %2',
+    args0: [
+      sprite(),
+      {
+        type: 'field_dropdown',
+        name: 'HEIGHT',
+        options: [['a little', '1.5'], ['high', '3'], ['very high', '5'], ['super high', '8']],
+      },
+    ],
+    inputsInline: true,
     previousStatement: null,
     nextStatement: null,
     style: 'sprite_blocks',
@@ -200,7 +277,7 @@ export const MAIN_BLOCKS = [
     previousStatement: null,
     nextStatement: null,
     style: 'sprite_blocks',
-    tooltip: 'Platformer levels only. Players and hazards have gravity on by default.',
+    tooltip: 'Platformer levels only. Most characters have gravity on by default.',
   },
   {
     type: 'sb_set_visible',
@@ -219,23 +296,32 @@ export const MAIN_BLOCKS = [
   {
     type: 'sb_all',
     message0: 'all %1 sprites',
-    args0: [selector('SELECTOR', 'class:hazard')],
+    args0: [selector('SELECTOR', 'class:character')],
     output: 'Array',
     style: 'sprite_blocks',
   },
   {
     type: 'sb_random_sprite',
     message0: 'a random %1 sprite',
-    args0: [selector('SELECTOR', 'class:hazard')],
+    args0: [selector('SELECTOR', 'class:character')],
     output: 'Sprite',
     style: 'sprite_blocks',
   },
   {
     type: 'sb_count',
     message0: 'number of %1 sprites',
-    args0: [selector('SELECTOR', 'class:collectible')],
+    args0: [selector('SELECTOR', 'class:item')],
     output: 'Number',
     style: 'sprite_blocks',
+  },
+  {
+    type: 'sb_closest',
+    message0: '%1 closest to %2',
+    args0: [selector('SELECTOR', 'class:item'), location()],
+    inputsInline: true,
+    output: 'Sprite',
+    style: 'sprite_blocks',
+    tooltip: 'The sprite of that kind nearest to a location, such as the door closest to the player.',
   },
   {
     type: 'sb_grid_pos',
@@ -256,7 +342,7 @@ export const MAIN_BLOCKS = [
   {
     type: 'sb_is_touching',
     message0: '%1 is touching %2',
-    args0: [sprite(), selector('SELECTOR', 'class:hazard')],
+    args0: [sprite(), selector('SELECTOR', 'class:character')],
     inputsInline: true,
     output: 'Boolean',
     style: 'sprite_blocks',
@@ -457,6 +543,7 @@ const val = (b: Blockly.Block, g: Gen, name: string, fallback = 'null') =>
   g.valueToCode(b, name, Order.NONE) || fallback;
 const num = (b: Blockly.Block, g: Gen, name: string) => val(b, g, name, '0');
 const loc = (b: Blockly.Block) => String(b.getFieldValue('LOC') ?? '0,0').split(',').map(Number);
+const location_ = (b: Blockly.Block, g: Gen) => val(b, g, 'LOC');
 
 function eventBody(b: Blockly.Block, g: Gen): string {
   return g.statementToCode(b, 'DO');
@@ -477,6 +564,21 @@ const generators: Record<string, (b: Blockly.Block, g: Gen) => string | [string,
   sb_this_sprite: () => [`$g.ctx('this')`, Order.FUNCTION_CALL],
   sb_other_sprite: () => [`$g.ctx('other')`, Order.FUNCTION_CALL],
 
+  sb_location: (b) => {
+    const [x, y] = loc(b);
+    return [`$g.loc(${x}, ${y})`, Order.FUNCTION_CALL];
+  },
+  sb_location_of: (b, g) => [`$g.locationOf(${val(b, g, 'SPRITE')})`, Order.FUNCTION_CALL],
+  sb_location_relative: (b, g) => [
+    `$g.relative(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('DIR'))}, ${num(b, g, 'N')})`,
+    Order.FUNCTION_CALL,
+  ],
+  sb_create: (b, g) => `$g.create(${q(b.getFieldValue('ASSET'))}, ${location_(b, g)});\n`,
+  sb_move_to_location: (b, g) => `$g.moveToLocation(${val(b, g, 'SPRITE')}, ${location_(b, g)});\n`,
+  sb_throw: (b, g) =>
+    `$g.throwFrom(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('ASSET'))}, ${q(b.getFieldValue('PATH'))});\n`,
+  sb_make_player: (b, g) => `$g.makePlayer(${val(b, g, 'SPRITE')});\n`,
+  sb_closest: (b, g) => [`$g.closest(${q(b.getFieldValue('SELECTOR'))}, ${location_(b, g)})`, Order.FUNCTION_CALL],
   sb_create_at: (b) => {
     const [x, y] = loc(b);
     return `$g.spawn(${q(b.getFieldValue('ASSET'))}, ${x}, ${y});\n`;
@@ -490,7 +592,7 @@ const generators: Record<string, (b: Blockly.Block, g: Gen) => string | [string,
     const [x, y] = loc(b);
     return `$g.moveTo(${val(b, g, 'SPRITE')}, ${x}, ${y});\n`;
   },
-  sb_bounce: (b, g) => `$g.bounce(${val(b, g, 'SPRITE')});\n`,
+  sb_bounce: (b, g) => `$g.bounce(${val(b, g, 'SPRITE')}, ${Number(b.getFieldValue('HEIGHT')) || 1.5});\n`,
   sb_face: (b, g) => `$g.face(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('DIR'))});\n`,
   sb_set_gravity: (b, g) => `$g.setGravity(${val(b, g, 'SPRITE')}, ${b.getFieldValue('ON')});\n`,
   sb_set_visible: (b, g) => `$g.setVisible(${val(b, g, 'SPRITE')}, ${b.getFieldValue('ON')});\n`,

@@ -9,6 +9,8 @@ export function levelSetupCode(level: Level): string {
     mode: level.mode,
     view: level.view,
     background: level.background,
+    color: level.color ?? null,
+    player: level.player ?? null,
   };
   const lines = [`$g.setupLevel(${JSON.stringify(settings)});`];
   const cells = Object.entries(level.cells)

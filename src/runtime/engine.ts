@@ -4,7 +4,7 @@
 // through the `GameApi` object (`$g` in generated code); generated path code uses `PathContext` (`$p`).
 import p5 from 'p5';
 import { allImageNames, getBackground, getSprite, imageUrl } from '../assets';
-import type { GameMode, Level, SpriteAsset, SpriteClass, ViewSize } from '../model';
+import type { GameMode, Level, SpriteAsset, ViewSize } from '../model';
 import { viewCols } from '../model';
 import { playSound } from './audio';
 
@@ -20,6 +20,15 @@ const LOOP_BUDGET = 200000;
 
 export type Dir = 'left' | 'right' | 'up' | 'down';
 const DIRS: Record<Dir, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
+/** Colour of the area outside the level, visible when the level is smaller than the camera. */
+const OUTSIDE_COLOR = '#3a4152';
+
+/** A grid location. Location values in generated code may also be lists of locations. */
+export interface Loc {
+  x: number;
+  y: number;
+}
+type LocRef = Loc | LocRef[] | null | undefined;
 
 export interface PathDef {
   loop: boolean;
@@ -61,6 +70,8 @@ export class Sprite {
   ctrlX = 0;
   ctrlY = 0;
   gravity: boolean;
+  /** Controlled by the keyboard and followed by the camera. */
+  isPlayer = false;
   visible = true;
   removed = false;
   onGround = false;
@@ -78,7 +89,7 @@ export class Sprite {
 
   constructor(asset: SpriteAsset, col: number, row: number) {
     this.asset = asset;
-    const solid = Sprite.isSolidClass(asset.cls);
+    const solid = asset.cls === 'platform' || asset.cls === 'obstacle';
     this.w = solid ? CELL : CELL * 0.8;
     this.h = solid ? CELL : CELL * 0.9;
     this.x = col * CELL + CELL / 2;
@@ -87,7 +98,7 @@ export class Sprite {
     this.prevY = this.y;
     this.homeX = this.x;
     this.homeY = this.y;
-    this.gravity = asset.cls === 'player' || asset.cls === 'hazard';
+    this.gravity = asset.gravity ?? asset.cls === 'character';
     this.facingDir = asset.facing ?? (asset.turn === 'rotate' ? 'up' : 'right');
     this.lookH = asset.facing === 'left' ? 'left' : 'right';
   }
@@ -101,16 +112,17 @@ export class Sprite {
     if (dir === 'left' || dir === 'right') this.lookH = dir;
   }
 
-  static isSolidClass(cls: SpriteClass): boolean {
-    return cls === 'platform' || cls === 'obstacle';
-  }
-
-  get cls(): SpriteClass {
+  get cls(): SpriteAsset['cls'] {
     return this.asset.cls;
   }
 
   get solid(): boolean {
-    return Sprite.isSolidClass(this.asset.cls);
+    return this.asset.cls === 'platform' || this.asset.cls === 'obstacle';
+  }
+
+  /** Platforms can be jumped through from below. */
+  get oneWay(): boolean {
+    return this.asset.cls === 'platform';
   }
 
   get col(): number {
@@ -128,8 +140,19 @@ export class Sprite {
   /** Smaller box used for overlap ("touch") checks between non-solid sprites. */
   touchBox(): Box {
     const b = this.box();
-    const inset = this.solid ? -1 : CELL * 0.12;
+    const inset = CELL * 0.12;
     return { l: b.l + inset, t: b.t + inset, r: b.r - inset, b: b.b - inset };
+  }
+
+  /**
+   * Sprites touch when their (slightly shrunken) boxes overlap. Solid sprites can never overlap anything,
+   * so standing on or pushing against one counts as touching it.
+   */
+  touches(o: Sprite): boolean {
+    if (!this.solid && !o.solid) return overlaps(this.touchBox(), o.touchBox());
+    const a = this.box();
+    const b = o.box();
+    return overlaps({ l: a.l - 1, t: a.t - 1, r: a.r + 1, b: a.b + 1 }, b);
   }
 }
 
@@ -149,6 +172,7 @@ export class PathRun {
 
   step(): void {
     for (let restarts = 0; restarts < 2; restarts++) {
+      if (this.ctx.sprite.removed) return;
       if (!this.gen) this.gen = this.def.fn(this.ctx);
       this.ctx.budget = 5000;
       const r = this.gen.next();
@@ -225,9 +249,11 @@ export class PathContext {
     return dy < 0 ? 'up' : 'down';
   }
 
-  *move(dir: Dir, count: number): Generator<unknown, void, unknown> {
+  /** Moves `count` grid spaces. `dir` may be 'forward': the way the sprite is facing. */
+  *move(direction: Dir | 'forward', count: number): Generator<unknown, void, unknown> {
     const n = Math.max(0, Math.floor(Number(count) || 0));
     const s = this.sprite;
+    const dir = direction === 'forward' ? s.facing : direction;
     const [dx, dy] = DIRS[dir] ?? [0, 0];
     for (let i = 0; i < n; i++) {
       if (s.removed) return;
@@ -276,6 +302,16 @@ export class PathContext {
   *wait(seconds: number): Generator<unknown, void, unknown> {
     const frames = Math.round((Number(seconds) || 0) * 60);
     for (let i = 0; i < frames; i++) yield;
+  }
+
+  /** Creates a sprite in the space in front of this one, facing the same way, and starts a path on it. */
+  throw(assetId: string, path: string): void {
+    this.game.throwFrom(this.sprite, assetId, path);
+  }
+
+  /** Removes this sprite. Generated code returns from the path right after. */
+  disappear(): void {
+    this.game.remove(this.sprite);
   }
 }
 
@@ -335,6 +371,9 @@ export class Game {
   rows = 9;
   view: ViewSize = 9;
   background: string | null = null;
+  color: string | null = null;
+  /** Character asset starred as the player for the current level. */
+  private levelPlayer: string | null = null;
   cam = { x: 0, y: 0 };
 
   // Game state
@@ -523,12 +562,22 @@ export class Game {
   // ---------------------------------------------------------------- levels
 
   /** Applies level settings. Called from hidden level setup code. */
-  setupLevel(opts: { cols: number; rows: number; mode: GameMode; view: ViewSize; background: string | null }): void {
+  setupLevel(opts: {
+    cols: number;
+    rows: number;
+    mode: GameMode;
+    view: ViewSize;
+    background: string | null;
+    color?: string | null;
+    player?: string | null;
+  }): void {
     this.cols = Math.max(1, opts.cols | 0);
     this.rows = Math.max(1, opts.rows | 0);
     this.mode = opts.mode;
     this.view = opts.view;
     this.background = opts.background;
+    this.color = opts.color ?? null;
+    this.levelPlayer = opts.player ?? null;
   }
 
   private loadLevelData(level: Level, setupCode: string | null): void {
@@ -543,6 +592,8 @@ export class Game {
         this.spawn(assetId, x, y);
       }
     }
+    // Every sprite of the starred character is a player.
+    for (const s of this.sprites) s.isPlayer = s.cls === 'character' && s.asset.id === this.levelPlayer;
     this.rebuildSolids();
     this.updateCamera(true);
   }
@@ -634,6 +685,20 @@ export class Game {
     if (wasSolid || s.solid) this.rebuildSolids();
   }
 
+  /** Creates a sprite in the space in front of `s`, facing the same way, and starts `path` on it. */
+  throwFrom(s: Sprite, assetId: string, path: string): Sprite | null {
+    if (s.removed) return null;
+    const [dx, dy] = DIRS[s.facing];
+    const x = s.col + dx;
+    const y = s.row + dy;
+    if (!this.inBounds(x, y) || this.solidAt(x, y, false)) return null;
+    const thrown = this.spawn(assetId, x, y);
+    if (!thrown) return null;
+    thrown.facing = s.facing;
+    this.api.setPath(thrown, path);
+    return thrown;
+  }
+
   moveTo(s: Sprite, x: number, y: number): void {
     if (!this.inBounds(x, y)) return;
     s.x = x * CELL + CELL / 2;
@@ -657,7 +722,7 @@ export class Game {
   /** Is there a solid sprite in this cell? One-way platforms count only when `includeOneWay`. */
   solidAt(x: number, y: number, includeOneWay: boolean): boolean {
     const list = this.solidGrid.get(x + ',' + y);
-    return !!list && list.some((s) => !s.removed && (includeOneWay || !s.asset.oneWay));
+    return !!list && list.some((s) => !s.removed && (includeOneWay || !s.oneWay));
   }
 
   private solidsNear(box: Box): Sprite[] {
@@ -729,7 +794,7 @@ export class Game {
     // Falling out of the level
     for (const s of this.sprites) {
       if (s.removed || s.y - s.h / 2 < this.rows * CELL + CELL * 2) continue;
-      if (s.cls === 'player') {
+      if (s.isPlayer) {
         s.x = s.homeX;
         s.y = s.homeY;
         s.vx = s.vy = 0;
@@ -763,7 +828,7 @@ export class Game {
     const down = k.has('down') || k.has('s');
     const jump = up || k.has('space');
     for (const s of this.sprites) {
-      if (s.cls !== 'player' || s.removed || s.path) continue;
+      if (!s.isPlayer || s.removed || s.path) continue;
       s.vx = (right ? 1 : 0) - (left ? 1 : 0);
       if (s.vx !== 0) s.facing = s.vx < 0 ? 'left' : 'right';
       s.vx *= this.playerSpeed;
@@ -783,7 +848,7 @@ export class Game {
   private integrate(s: Sprite): void {
     const grav = this.gravityActive(s);
     if (grav) s.vy = Math.min(s.vy + GRAVITY, MAX_FALL);
-    else if (!(s.cls === 'player' && !s.path)) s.vy = 0;
+    else if (!(s.isPlayer && !s.path)) s.vy = 0;
     const dx = s.vx + s.ctrlX;
     const dy = s.vy + (grav ? 0 : s.ctrlY);
 
@@ -792,7 +857,7 @@ export class Game {
     s.x += dx;
     if (dx !== 0) {
       for (const o of this.solidsNear(s.box())) {
-        if (o.asset.oneWay || !overlaps(s.box(), o.box())) continue;
+        if (o.oneWay || !overlaps(s.box(), o.box())) continue;
         s.x = dx > 0 ? o.box().l - s.w / 2 : o.box().r + s.w / 2;
         s.blockedX = true;
       }
@@ -811,7 +876,7 @@ export class Game {
     for (const o of this.solidsNear(s.box())) {
       const ob = o.box();
       if (!overlaps(s.box(), ob)) continue;
-      if (o.asset.oneWay && !(dy > 0 && prevBottom <= ob.t + 0.01)) continue;
+      if (o.oneWay && !(dy > 0 && prevBottom <= ob.t + 0.01)) continue;
       if (dy > 0) {
         s.y = ob.t - s.h / 2;
         s.onGround = true;
@@ -846,10 +911,9 @@ export class Game {
       const now = new Set<string>();
       for (const a of as) {
         if (a.removed) continue;
-        const ab = a.touchBox();
         for (const b of bs) {
           if (a === b || b.removed || a.removed) continue;
-          if (!overlaps(ab, b.touchBox())) continue;
+          if (!a.touches(b)) continue;
           const key = a.id + ':' + b.id;
           now.add(key);
           if (h.mode === 'while' || !h.pairs.has(key)) this.call(h.fn, a, b);
@@ -911,7 +975,7 @@ export class Game {
     const vh = this.view * CELL;
     const lw = this.cols * CELL;
     const lh = this.rows * CELL;
-    const target = this.sprites.find((s) => s.cls === 'player' && !s.removed);
+    const target = this.sprites.find((s) => s.isPlayer && !s.removed);
     let tx = target ? target.x - vw / 2 : 0;
     let ty = target ? target.y - vh / 2 : lh - vh;
     tx = lw <= vw ? (lw - vw) / 2 : Math.max(0, Math.min(lw - vw, tx));
@@ -943,27 +1007,31 @@ export class Game {
     p.push();
     p.scale(scale);
     p.translate(-Math.round(this.cam.x * scale) / scale, -Math.round(this.cam.y * scale) / scale);
-    if (this.mode === 'topdown' || getBackground(this.background)?.type === 'tile') {
-      p.noFill();
-      p.stroke(0, 40);
-      p.strokeWeight(1 / scale);
-      p.rect(0, 0, this.cols * CELL, this.rows * CELL);
-    }
     p.noStroke();
-    const order: Record<SpriteClass, number> = {
-      scenery: 0, goal: 1, platform: 2, obstacle: 2, collectible: 3, hazard: 4, player: 5,
-    };
-    const sorted = [...this.sprites].sort((a, b) => order[a.cls] - order[b.cls]);
+    const sorted = [...this.sprites].sort((a, b) => drawLayer(a) - drawLayer(b));
     for (const s of sorted) if (!s.removed && s.visible) this.drawSprite(s);
     p.pop();
     this.drawHud();
   }
 
+  /** Fills the level area with its background and everything outside it with a dark colour. */
   private drawBackground(scale: number): void {
     const p = this.p;
     const bg = getBackground(this.background);
-    p.background(bg?.color ?? '#9fd8f0');
-    if (!bg) return;
+    p.background(OUTSIDE_COLOR);
+    p.push();
+    p.noStroke();
+    p.clip(() =>
+      p.rect(-Math.round(this.cam.x * scale), -Math.round(this.cam.y * scale), this.cols * CELL * scale, this.rows * CELL * scale),
+    );
+    p.fill(bg?.color ?? this.color ?? '#9fd8f0');
+    p.rect(0, 0, CANVAS_W, CANVAS_H);
+    if (bg) this.drawBackgroundImages(bg, scale);
+    p.pop();
+  }
+
+  private drawBackgroundImages(bg: NonNullable<ReturnType<typeof getBackground>>, scale: number): void {
+    const p = this.p;
     if (bg.type === 'tile') {
       const img = this.images.get(bg.tile!);
       if (!img) return;
@@ -976,6 +1044,7 @@ export class Game {
       return;
     }
     // Scenic: sky, a parallax horizon strip, then ground below.
+    if (bg.tint) p.tint(bg.tint);
     const t = Math.ceil(CANVAS_H / 6);
     const stripY = Math.round(CANVAS_H * 0.55);
     const sky = this.images.get(bg.sky!);
@@ -1073,11 +1142,19 @@ export class Game {
   }
 }
 
+/** Back items, then platforms and obstacles, front items, characters and finally the player. */
+function drawLayer(s: Sprite): number {
+  if (s.isPlayer) return 4;
+  if (s.cls === 'character') return 3;
+  if (s.cls === 'item') return s.asset.layer === 'back' ? 0 : 2;
+  return 1;
+}
+
 type SpriteRef = Sprite | SpriteRef[] | null | undefined;
 
 /**
  * The object generated user code calls as `$g`. Every method finishes within the current frame.
- * Selectors: "player", "any", "class:<cls>", "asset:<assetId>".
+ * Selectors: "player", "any", "class:<cls>" (never includes the player), "asset:<assetId>".
  */
 export class GameApi {
   constructor(private g: Game) {}
@@ -1125,9 +1202,10 @@ export class GameApi {
   find(sel: string): Sprite[] {
     const all = this.g.sprites.filter((s) => !s.removed);
     if (sel === 'any') return all;
-    if (sel === 'player') return all.filter((s) => s.cls === 'player');
+    if (sel === 'player') return all.filter((s) => s.isPlayer);
     const [kind, value] = String(sel).split(':');
-    if (kind === 'class') return all.filter((s) => s.cls === value);
+    // "character" means the other characters: the player is chosen with its own selector.
+    if (kind === 'class') return all.filter((s) => s.cls === value && !s.isPlayer);
     if (kind === 'asset') return all.filter((s) => s.asset.id === value);
     return [];
   }
@@ -1142,9 +1220,53 @@ export class GameApi {
     return list.length ? list[Math.floor(Math.random() * list.length)] : null;
   }
 
+  // Locations
+  loc(x: number, y: number): Loc {
+    return { x: Math.floor(Number(x) || 0), y: Math.floor(Number(y) || 0) };
+  }
+  locs(r: LocRef): Loc[] {
+    if (!r) return [];
+    if (Array.isArray(r)) return r.flatMap((x) => this.locs(x));
+    return typeof r.x === 'number' && typeof r.y === 'number' ? [r] : [];
+  }
+  locationOf(ref: SpriteRef): Loc[] {
+    return this.refs(ref).map((s) => ({ x: s.col, y: s.row }));
+  }
+  relative(ref: SpriteRef, dir: Dir, n: number): Loc[] {
+    const [dx, dy] = DIRS[dir] ?? [0, 0];
+    const k = Math.floor(Number(n) || 0);
+    return this.refs(ref).map((s) => ({ x: s.col + dx * k, y: s.row + dy * k }));
+  }
+  closest(sel: string, at: LocRef): Sprite | null {
+    const target = this.locs(at)[0];
+    if (!target) return null;
+    const cx = (target.x + 0.5) * CELL;
+    const cy = (target.y + 0.5) * CELL;
+    let best: Sprite | null = null;
+    let bestDist = Infinity;
+    for (const s of this.find(sel)) {
+      const d = (s.x - cx) ** 2 + (s.y - cy) ** 2;
+      if (d < bestDist) {
+        best = s;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
   // Creating and removing
   spawn(assetId: string, x: number, y: number): Sprite | null {
     return this.g.spawn(assetId, x, y);
+  }
+  create(assetId: string, at: LocRef): Sprite[] {
+    return this.locs(at)
+      .map((l) => this.g.spawn(assetId, l.x, l.y))
+      .filter((s): s is Sprite => !!s);
+  }
+  throwFrom(ref: SpriteRef, assetId: string, path: string): Sprite[] {
+    return this.refs(ref)
+      .map((s) => this.g.throwFrom(s, assetId, path))
+      .filter((s): s is Sprite => !!s);
   }
   spawnAtLocation(assetId: string, x: number, y: number): Sprite | null {
     return this.g.spawn(assetId, x, y);
@@ -1186,6 +1308,16 @@ export class GameApi {
   moveTo(ref: SpriteRef, x: number, y: number): void {
     this.refs(ref).forEach((s) => this.g.moveTo(s, Math.floor(Number(x)), Math.floor(Number(y))));
   }
+  moveToLocation(ref: SpriteRef, at: LocRef): void {
+    const l = this.locs(at)[0];
+    if (l) this.moveTo(ref, l.x, l.y);
+  }
+  /** Makes the given character(s) the player; the previous player becomes an ordinary character. */
+  makePlayer(ref: SpriteRef): void {
+    const next = this.refs(ref).filter((s) => s.cls === 'character');
+    if (!next.length) return;
+    for (const s of this.g.sprites) s.isPlayer = next.includes(s);
+  }
   setGravity(ref: SpriteRef, on: boolean): void {
     this.refs(ref).forEach((s) => (s.gravity = !!on));
   }
@@ -1195,9 +1327,11 @@ export class GameApi {
   setSpeed(ref: SpriteRef, speed: number): void {
     this.refs(ref).forEach((s) => (s.speed = Math.max(0.25, Math.min(16, Number(speed) || 2))));
   }
-  bounce(ref: SpriteRef): void {
+  /** Platformer levels only: launches the sprite(s) upward about `height` spaces. */
+  bounce(ref: SpriteRef, height = 1.5): void {
+    if (this.g.mode !== 'platformer') return;
     this.refs(ref).forEach((s) => {
-      s.vy = -jumpVelocity(1.5);
+      s.vy = -jumpVelocity(Number(height) || 1.5);
       s.onGround = false;
     });
   }
@@ -1215,7 +1349,7 @@ export class GameApi {
   }
   isTouching(a: SpriteRef, sel: string): boolean {
     const others = this.find(sel);
-    return this.refs(a).some((s) => others.some((o) => o !== s && overlaps(s.touchBox(), o.touchBox())));
+    return this.refs(a).some((s) => others.some((o) => o !== s && s.touches(o)));
   }
   isOnGround(ref: SpriteRef): boolean {
     return this.refs(ref).some((s) => s.onGround);

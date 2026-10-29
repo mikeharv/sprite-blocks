@@ -6,7 +6,7 @@ import './style.css';
 import { registerFields } from './blocks/fields';
 import { registerMainBlocks } from './blocks/main_blocks';
 import { registerPathBlocks } from './blocks/path_blocks';
-import { blankProject, exampleProject } from './example';
+import { blankProject, exampleProject, gardenProject } from './example';
 import type { Project } from './model';
 import { preloadSounds, unlockAudio } from './runtime/audio';
 import { Game } from './runtime/engine';
@@ -26,7 +26,7 @@ import {
 import { LevelEditor } from './ui/levelEditor';
 import { startTour } from './ui/tour';
 import { AssetLibrary } from './ui/library';
-import { el, openModal, toast } from './ui/modal';
+import { confirmDialog, el, openModal, toast } from './ui/modal';
 import {
   compileProject,
   initWorkspaces,
@@ -35,7 +35,9 @@ import {
   pathsWorkspace,
   resizeWorkspaces,
   saveWorkspaces,
+  scrollToBlocks,
 } from './workspaces';
+import { pathToolbox } from './blocks/toolbox';
 
 Blockly.setLocale(En as unknown as Record<string, string>);
 registerFields();
@@ -49,7 +51,6 @@ const saveState = $('save-state');
 const runBtn = $<HTMLButtonElement>('btn-run');
 const stopBtn = $<HTMLButtonElement>('btn-stop');
 const errorBox = $('game-error');
-const pathsModal = $('paths-modal');
 
 let dirty = false;
 let savedName: string | null = null;
@@ -119,39 +120,28 @@ $('btn-show-code').addEventListener('click', () => {
   );
 });
 
-// ---------------------------------------------------------------- tabs and paths modal
+// ---------------------------------------------------------------- tabs
 
 const tabs = document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]');
+let pathsShown = false;
 tabs.forEach((tab) =>
   tab.addEventListener('click', () => {
+    const previous = document.querySelector<HTMLElement>('.tab.active')?.dataset.tab;
     tabs.forEach((t) => t.classList.toggle('active', t === tab));
     document.querySelectorAll('.tab-view').forEach((v) => v.classList.toggle('active', v.id === tab.dataset.tab + '-view'));
     if (app.classList.contains('expanded')) $('btn-expand').click();
-    if (tab.dataset.tab === 'code') requestAnimationFrame(resizeWorkspaces);
+    Blockly.hideChaff();
+    if (tab.dataset.tab === 'rules' || tab.dataset.tab === 'paths') requestAnimationFrame(resizeWorkspaces);
+    if (tab.dataset.tab === 'paths' && previous !== 'paths' && !pathsShown) {
+      // The paths workspace starts hidden, so it can only be scrolled once it has a size.
+      pathsShown = true;
+      requestAnimationFrame(() => {
+        pathsWorkspace().updateToolbox(pathToolbox());
+        scrollToBlocks(pathsWorkspace());
+      });
+    }
   }),
 );
-
-function openPaths(): void {
-  pathsModal.classList.add('open');
-  pathsModal.setAttribute('aria-hidden', 'false');
-  requestAnimationFrame(() => {
-    Blockly.svgResize(pathsWorkspace());
-    pathsWorkspace().scrollCenter();
-  });
-}
-
-function closePaths(): void {
-  pathsModal.classList.remove('open');
-  pathsModal.setAttribute('aria-hidden', 'true');
-  Blockly.hideChaff();
-  mainWorkspace().refreshToolboxSelection();
-}
-
-$('tab-paths').addEventListener('click', openPaths);
-$('btn-paths-done').addEventListener('click', closePaths);
-pathsModal.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !Blockly.WidgetDiv.isVisible() && !Blockly.DropDownDiv.isVisible()) closePaths();
-});
 
 // ---------------------------------------------------------------- workspaces and levels
 
@@ -176,6 +166,7 @@ new AssetLibrary($('sprites-view'));
 new LevelEditor($('level-view'));
 
 state.on((kind) => {
+  if (kind === 'sounds') scheduleAutosave();
   if (kind === 'level' || kind === 'levels' || kind === 'currentLevel' || kind === 'assets') {
     if (!game.running) game.showPreview(state.level);
     if (kind !== 'currentLevel') scheduleAutosave();
@@ -193,6 +184,7 @@ function openProject(project: Project, name: string | null): void {
   state.emit('project');
   loadWorkspaces(project);
   state.emit('assets');
+  pathsShown = false;
   nameInput.value = project.name;
   savedName = name;
   resetBaseline();
@@ -208,33 +200,45 @@ nameInput.addEventListener('change', () => {
   scheduleAutosave();
 });
 
-function confirmDiscard(): boolean {
+async function confirmDiscard(): Promise<boolean> {
   syncProjectFromWorkspaces();
   markDirty(JSON.stringify(state.project) !== baseline);
-  return !dirty || confirm('You have unsaved changes. Continue without saving?');
+  if (!dirty) return true;
+  return confirmDialog({
+    title: 'Unsaved changes',
+    message: 'This game has changes you haven’t saved. Continue without saving them?',
+    confirmLabel: 'Continue without saving',
+    danger: true,
+  });
 }
 
 $('btn-new').addEventListener('click', () => {
-  const choose = (make: () => Project) => () => {
-    if (!confirmDiscard()) return false;
-    openProject(make(), null);
+  let close = () => {};
+  const choice = (title: string, description: string, make: () => Project, after?: () => void) => {
+    const button = el('button', { className: 'new-choice', type: 'button' }, [
+      el('strong', { textContent: title }),
+      el('span', { textContent: description }),
+    ]);
+    button.addEventListener('click', async () => {
+      if (!(await confirmDiscard())) return;
+      close();
+      openProject(make(), null);
+      after?.();
+    });
+    return button;
   };
-  openModal(
-    'New game',
-    el('p', { textContent: 'Start from an empty level or from the Coin Run example platformer.' }),
-    [
-      { label: 'Cancel' },
-      { label: 'Example: Coin Run', onClick: choose(exampleProject) },
-      {
-        label: 'Blank game',
-        primary: true,
-        onClick: () => {
-          if (choose(() => blankProject())() === false) return false;
-          setTimeout(() => offerTour('Your new game is empty. Want a quick tour of how to build it, step by step?'));
-        },
-      },
-    ],
-  );
+  const choices = el('div', { className: 'new-choices' }, [
+    choice(
+      'Blank game',
+      'An empty level. Add your own sprites and sounds.',
+      () => blankProject(),
+      () => setTimeout(() => offerTour('Your new game is empty. Want a quick tour of how to build it, step by step?')),
+    ),
+    choice('Coin Run', 'Example platformer: collect coins, stomp enemies, reach the door.', exampleProject),
+    choice('Garden Gem Hunt', 'Example top-down game: find gems in a hedge maze and cast sparkles.', gardenProject),
+  ]);
+  close = openModal('New game', choices, [{ label: 'Cancel' }]);
+  (choices.firstElementChild as HTMLElement).focus();
 });
 
 $('btn-tour').addEventListener('click', () => startTour());
@@ -246,9 +250,20 @@ function offerTour(message: string): void {
   ]);
 }
 
-$('btn-save').addEventListener('click', () => {
+$('btn-save').addEventListener('click', async () => {
   const name = (nameInput.value.trim() || 'My Game').slice(0, 80);
-  if (projectExists(name) && savedName !== name && !confirm(`Replace the saved game “${name}”?`)) return;
+  if (
+    projectExists(name) &&
+    savedName !== name &&
+    !(await confirmDialog({
+      title: 'Replace saved game?',
+      message: `A game called “${name}” is already saved in this browser. Replace it with this one?`,
+      confirmLabel: 'Replace',
+      danger: true,
+    }))
+  ) {
+    return;
+  }
   state.project.name = name;
   syncProjectFromWorkspaces();
   try {
@@ -279,8 +294,8 @@ $('btn-load').addEventListener('click', () => {
                 className: 'btn primary small',
                 textContent: 'Open',
                 type: 'button',
-                onclick: () => {
-                  if (!confirmDiscard()) return;
+                onclick: async () => {
+                  if (!(await confirmDiscard())) return;
                   const project = loadSavedProject(p.name);
                   if (project) openProject(project, p.name);
                   close();
@@ -290,8 +305,14 @@ $('btn-load').addEventListener('click', () => {
                 className: 'btn danger small',
                 textContent: 'Delete',
                 type: 'button',
-                onclick: () => {
-                  if (!confirm(`Delete “${p.name}” from this browser? This cannot be undone.`)) return;
+                onclick: async () => {
+                  const ok = await confirmDialog({
+                    title: 'Delete saved game?',
+                    message: `Delete “${p.name}” from this browser? This cannot be undone.`,
+                    confirmLabel: 'Delete',
+                    danger: true,
+                  });
+                  if (!ok) return;
                   deleteSavedProject(p.name);
                   if (savedName === p.name) savedName = null;
                   render();
@@ -313,7 +334,7 @@ $('btn-export').addEventListener('click', () => {
 });
 
 $('btn-import').addEventListener('click', async () => {
-  if (!confirmDiscard()) return;
+  if (!(await confirmDiscard())) return;
   try {
     const project = await pickProjectFile();
     if (project) {

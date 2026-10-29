@@ -1,8 +1,8 @@
 // Central app state with a tiny change-notification mechanism.
 import type { Level, Project } from './model';
-import { getSprite, getBackground } from './assets';
+import { BACKGROUNDS, getSound, getSprite } from './assets';
 
-export type ChangeKind = 'project' | 'assets' | 'levels' | 'level' | 'currentLevel' | 'paths';
+export type ChangeKind = 'project' | 'assets' | 'sounds' | 'levels' | 'level' | 'currentLevel' | 'paths';
 
 type Listener = (kind: ChangeKind) => void;
 
@@ -17,11 +17,17 @@ class AppState {
 
   /** Sprite asset ids in the project, in library order. */
   get spriteAssetIds(): string[] {
-    return this.project.assets.filter((id) => getSprite(id));
+    return (this.project?.assets ?? []).filter((id) => getSprite(id));
   }
 
+  /** Every background in the library: backgrounds are chosen per level, not added to the project. */
   get backgroundAssetIds(): string[] {
-    return this.project.assets.filter((id) => getBackground(id));
+    return BACKGROUNDS.map((b) => b.id);
+  }
+
+  /** Sound ids in the project, in library order. */
+  get soundIds(): string[] {
+    return (this.project?.sounds ?? []).filter((id) => getSound(id));
   }
 
   on(fn: Listener): void {

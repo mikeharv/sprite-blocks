@@ -1,10 +1,11 @@
 // Creates the main and paths Blockly workspaces and keeps them in sync with each other and the levels.
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator } from 'blockly/javascript';
-import { FieldGridLocation } from './blocks/fields';
+import { FieldGridLocation, FieldPath, FieldSound, FieldSpriteAsset } from './blocks/fields';
+import { getAsset, getSound } from './assets';
 import { compilePaths } from './blocks/path_blocks';
 import { pathNames, setPathWorkspace } from './blocks/path_registry';
-import { MAIN_TOOLBOX, PATH_TOOLBOX, registerToolboxCallbacks, theme } from './blocks/toolbox';
+import { MAIN_TOOLBOX, pathToolbox, registerToolboxCallbacks, theme } from './blocks/toolbox';
 import { levelSetupCode } from './compile';
 import type { CompiledProgram } from './runtime/engine';
 import type { Project } from './model';
@@ -39,7 +40,7 @@ export function initWorkspaces(
   callbacks: { onChange: () => void },
 ): void {
   main = Blockly.inject(mainEl, workspaceOptions(MAIN_TOOLBOX));
-  paths = Blockly.inject(pathsEl, workspaceOptions(PATH_TOOLBOX));
+  paths = Blockly.inject(pathsEl, workspaceOptions(pathToolbox()));
   setPathWorkspace(paths);
   registerToolboxCallbacks(main);
 
@@ -51,6 +52,10 @@ export function initWorkspaces(
     refreshWarnings();
     callbacks.onChange();
   };
+  paths.addChangeListener((e) => {
+    // Path names appear in main-workspace dropdowns: keep the flyout in step.
+    if (!e.isUiEvent && !loading) main.refreshToolboxSelection();
+  });
   main.addChangeListener(changed);
   paths.addChangeListener((e) => {
     if (loading) return;
@@ -65,10 +70,11 @@ export function initWorkspaces(
   });
 
   state.on((kind) => {
-    if (kind === 'assets' || kind === 'level' || kind === 'currentLevel' || kind === 'levels') {
+    if (kind === 'assets' || kind === 'sounds' || kind === 'level' || kind === 'currentLevel' || kind === 'levels') {
       refreshWarnings();
       // Rebuild flyouts so dropdown defaults match the project's assets.
       main.refreshToolboxSelection();
+      paths.updateToolbox(pathToolbox());
     }
   });
 }
@@ -84,27 +90,57 @@ function renamePathReferences(oldName: string, newName: string): void {
   Blockly.Events.setGroup(false);
 }
 
-/** Warns about grid locations outside the current level and references to missing paths. */
-export function refreshWarnings(): void {
-  if (!main) return;
+/** Blocks that only do something in platformer levels. */
+const PLATFORMER_ONLY = new Set(['sb_bounce', 'sb_set_gravity', 'sb_jump_height', 'sb_on_ground', 'sb_path_jump', 'sb_path_on_ground']);
+
+/** Problems with one block's own fields, or null. */
+function blockWarnings(block: Blockly.Block, names: Set<string>, platformer: boolean): string[] {
   const level = state.level;
-  const names = new Set(pathNames());
-  for (const block of main.getAllBlocks(false)) {
-    if (block.isInFlyout) continue;
-    let warning: string | null = null;
-    for (const input of block.inputList) {
-      for (const field of input.fieldRow) {
-        if (field instanceof FieldGridLocation && !field.isInLevel()) {
-          const [x, y] = field.coords;
-          warning = `(${x}, ${y}) is outside “${level.name}”, which is ${level.cols}×${level.rows}. Nothing will be created or moved there.`;
-        }
+  const out: string[] = [];
+  for (const input of block.inputList) {
+    for (const field of input.fieldRow) {
+      if (field instanceof FieldGridLocation && !field.isInLevel()) {
+        const [x, y] = field.coords;
+        out.push(`(${x}, ${y}) is outside “${level.name}”, which is ${level.cols}×${level.rows}. Nothing will be created or moved there.`);
+      } else if (field instanceof FieldSound && !field.isInProject()) {
+        out.push(`The sound “${getSound(field.getValue())?.name}” isn’t in your project. Add it on the Sprites tab.`);
+      } else if (field instanceof FieldSpriteAsset && !field.isInProject()) {
+        out.push(`“${getAsset(field.getValue())?.name}” isn’t in your project. Add it on the Sprites tab.`);
+      } else if (field instanceof FieldPath && !names.has(field.getValue() ?? '')) {
+        out.push(`There is no path named “${field.getValue()}”. Create it on the Paths tab.`);
       }
     }
-    if (block.type === 'sb_set_path' && !names.has(block.getFieldValue('PATH'))) {
-      warning = `There is no path named “${block.getFieldValue('PATH')}”. Open the path editor to create it.`;
+  }
+  if (!platformer && PLATFORMER_ONLY.has(block.type)) {
+    out.push('Every level is top-down, so this block does nothing. It only works in platformer levels.');
+  }
+  return out;
+}
+
+/**
+ * Warns about grid locations outside the current level, sounds and sprites missing from the project,
+ * missing paths, and platformer blocks in all-top-down games. Shadow blocks report on their parent.
+ */
+export function refreshWarnings(): void {
+  if (!main || !paths) return;
+  const names = new Set(pathNames());
+  const platformer = state.project.levels.some((l) => l.mode === 'platformer');
+  for (const ws of [main, paths]) {
+    const found = new Map<Blockly.Block, string[]>();
+    for (const block of ws.getAllBlocks(false)) {
+      if (block.isInFlyout) continue;
+      const warnings = blockWarnings(block, names, platformer);
+      if (!warnings.length) continue;
+      let target: Blockly.Block | null = block;
+      while (target?.isShadow()) target = target.getParent();
+      if (target) found.set(target, [...(found.get(target) ?? []), ...warnings]);
     }
-    if (block.type === 'sb_set_path' || block.type === 'sb_create_at' || block.type === 'sb_move_to') {
-      block.setWarningText(warning, 'sb_check');
+    for (const block of ws.getAllBlocks(false)) {
+      if (block.isInFlyout || block.isShadow()) continue;
+      const text = found.get(block)?.join('\n\n') ?? null;
+      if (text || block.hasIcon(Blockly.icons.IconType.WARNING)) {
+        block.setWarningText(text, 'sb_check');
+      }
     }
   }
 }
@@ -171,6 +207,13 @@ export function compileProject(project: Project): CompiledProgram {
     main: javascriptGenerator.workspaceToCode(main),
     paths: compilePaths(paths),
   };
+}
+
+/** Scrolls so the top-left of the blocks is just inside the visible area, beside the toolbox. */
+export function scrollToBlocks(ws: Blockly.WorkspaceSvg): void {
+  const box = ws.getBlocksBoundingBox();
+  if (!ws.getTopBlocks(false).length) return;
+  ws.scroll(-box.left * ws.scale + 24, -box.top * ws.scale + 24);
 }
 
 export function resizeWorkspaces(): void {

@@ -30,12 +30,18 @@
         <nav class="tabs" role="tablist">
           <button class="tab" data-tab="sprites" role="tab" type="button">Sprites</button>
           <button class="tab" data-tab="level" role="tab" type="button">Levels</button>
-          <button class="tab active" data-tab="code" role="tab" type="button">Code</button>
-          <button class="tab" id="tab-paths" role="tab" type="button">Paths</button>
+          <button class="tab active" data-tab="rules" role="tab" type="button">Rules</button>
+          <button class="tab" data-tab="paths" role="tab" type="button">Paths</button>
         </nav>
         <div class="tab-view" id="sprites-view"></div>
         <div class="tab-view" id="level-view"></div>
-        <div class="tab-view active" id="code-view"><div id="blockly-main" class="blockly-host"></div></div>
+        <div class="tab-view active" id="rules-view"><div id="blockly-main" class="blockly-host"></div></div>
+        <div class="tab-view" id="paths-view">
+          <p class="hint paths-hint">
+            Each path is a list of grid moves. Give paths to sprites with the “set path” block on the Rules tab.
+          </p>
+          <div id="blockly-paths" class="blockly-host"></div>
+        </div>
       </section>
 
       <section class="game-pane">
@@ -54,18 +60,6 @@
       </section>
     </main>
 
-    <div id="paths-modal" class="paths-modal" aria-hidden="true">
-      <div class="paths-card" role="dialog" aria-label="Path editor">
-        <header class="modal-header">
-          <h2>Paths</h2>
-          <p class="hint">
-            Each path is a list of grid moves. Assign paths to sprites with the “set path” block on the Code tab.
-          </p>
-          <button class="btn primary" id="btn-paths-done" type="button">Done</button>
-        </header>
-        <div id="blockly-paths" class="blockly-host"></div>
-      </div>
-    </div>
     <div id="modal-root"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

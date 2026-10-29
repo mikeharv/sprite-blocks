@@ -1,22 +1,18 @@
 // Project data model shared by the editors, storage and the runtime.
 
-export type SpriteClass =
-  | 'player'
-  | 'platform'
-  | 'obstacle'
-  | 'collectible'
-  | 'hazard'
-  | 'scenery'
-  | 'goal';
+/**
+ * - character: moves around; one character per level is starred as the player.
+ * - platform: one-way ground that can be jumped through from below.
+ * - obstacle: solid on every side.
+ * - item: everything else (coins, doors, trees…). Your rules give items meaning.
+ */
+export type SpriteClass = 'character' | 'platform' | 'obstacle' | 'item';
 
 export const SPRITE_CLASSES: { id: SpriteClass; label: string; plural: string }[] = [
-  { id: 'player', label: 'player', plural: 'players' },
+  { id: 'character', label: 'character', plural: 'characters' },
   { id: 'platform', label: 'platform', plural: 'platforms' },
   { id: 'obstacle', label: 'obstacle', plural: 'obstacles' },
-  { id: 'collectible', label: 'collectible', plural: 'collectibles' },
-  { id: 'hazard', label: 'hazard', plural: 'hazards' },
-  { id: 'scenery', label: 'scenery', plural: 'scenery' },
-  { id: 'goal', label: 'goal', plural: 'goals' },
+  { id: 'item', label: 'item', plural: 'items' },
 ];
 
 /**
@@ -45,8 +41,10 @@ export interface SpriteAsset {
   frames: string[];
   /** Direction the artwork faces. */
   facing?: 'up' | 'down' | 'left' | 'right';
-  /** One-way platforms can be jumped through from below. */
-  oneWay?: boolean;
+  /** Overrides the class default (characters fall in platformer levels, other sprites float). */
+  gravity?: boolean;
+  /** Items only: drawn behind platforms ('back', e.g. trees and doors) or in front of them (default). */
+  layer?: 'back' | 'front';
 }
 
 export interface BackgroundAsset {
@@ -60,6 +58,8 @@ export interface BackgroundAsset {
   ground?: string;
   tile?: string;
   color: string;
+  /** Colour multiplied over the images, so one set of art can make a sunset or a night sky. */
+  tint?: string;
 }
 
 export type Asset = SpriteAsset | BackgroundAsset;
@@ -76,7 +76,11 @@ export interface Level {
   rows: number;
   mode: GameMode;
   view: ViewSize;
+  /** Background asset id, or null for a plain `color`. */
   background: string | null;
+  color?: string;
+  /** Character asset that the keyboard controls in this level. */
+  player?: string | null;
   /** Sparse map of "x,y" -> sprite asset id. Origin is the top-left cell. */
   cells: Record<string, string>;
 }
@@ -85,8 +89,10 @@ export interface Project {
   format: 'sprite-blocks';
   version: 1;
   name: string;
-  /** Asset ids added to this project from the library. */
+  /** Sprite asset ids added to this project from the library. */
   assets: string[];
+  /** Sound ids added to this project. */
+  sounds: string[];
   levels: Level[];
   /** Blockly JSON serialization of the main workspace. */
   main: object;
@@ -113,14 +119,20 @@ export function newLevel(name: string, mode: GameMode = 'platformer'): Level {
   return {
     id: uid('level'),
     name,
-    cols: 32,
+    cols: 16,
     rows: 9,
     mode,
     view: 9,
-    background: mode === 'platformer' ? 'bg_sky' : 'bg_floor_stone',
+    background: mode === 'platformer' ? 'bg_sky' : 'bg_floor_grass',
+    player: null,
     cells: {},
   };
 }
+
+/** Curated colours for plain backgrounds. */
+export const BACKGROUND_COLORS = [
+  '#9fd8f0', '#cfe8ff', '#ffe3ef', '#f3dcff', '#fff3c4', '#d8f5d0', '#ffd8b8', '#2e3350', '#1b1f2b',
+];
 
 export function viewCols(view: ViewSize): number {
   return (view * 16) / 9;

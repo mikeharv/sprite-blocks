@@ -1,6 +1,6 @@
 // Custom Blockly fields. Each is registered so blocks can reference it from standard JSON definitions.
 import * as Blockly from 'blockly/core';
-import { SOUNDS, getAsset, getSprite, thumbUrl } from '../assets';
+import { SOUNDS, getAsset, getSound, getSprite, thumbUrl } from '../assets';
 import { SPRITE_CLASSES, parseCellKey } from '../model';
 import { state } from '../state';
 import { pathNames } from './path_registry';
@@ -41,20 +41,24 @@ abstract class FieldDynamicDropdown extends Blockly.FieldDropdown {
 }
 
 function selectorLabel(value: string): string {
+  if (value === 'player') return 'the player';
   if (value === 'any') return 'any sprite';
   const [kind, id] = value.split(':');
   if (kind === 'class') return SPRITE_CLASSES.find((c) => c.id === id)?.label ?? id;
   return getAsset(id)?.name ?? id;
 }
 
-/** Chooses a group of sprites: any sprite, all sprites of a class, or all sprites made from one asset. */
+/**
+ * Chooses a group of sprites: the player, any sprite, all sprites of a class (other than the player),
+ * or all sprites made from one asset.
+ */
 export class FieldSpriteSelector extends FieldDynamicDropdown {
   static fromJson(options: Blockly.FieldDropdownFromJsonConfig & { value?: string }) {
-    return new FieldSpriteSelector(options.value ?? 'class:player');
+    return new FieldSpriteSelector(options.value ?? 'player');
   }
 
   protected options(): MenuOption[] {
-    const opts: MenuOption[] = [['any sprite', 'any'], SEP];
+    const opts: MenuOption[] = [['the player', 'player'], ['any sprite', 'any'], SEP];
     for (const c of SPRITE_CLASSES) opts.push([c.label, 'class:' + c.id]);
     const assets = state.spriteAssetIds;
     if (assets.length) opts.push(SEP);
@@ -63,7 +67,7 @@ export class FieldSpriteSelector extends FieldDynamicDropdown {
   }
 
   protected isValid(value: string): boolean {
-    return value === 'any' || /^(class|asset):\w+$/.test(value);
+    return value === 'player' || value === 'any' || /^(class|asset):\w+$/.test(value);
   }
 
   protected labelFor(value: string): string {
@@ -93,9 +97,15 @@ export class FieldSpriteAsset extends FieldDynamicDropdown {
   protected labelFor(value: string): string {
     return getAsset(value)?.name ?? value;
   }
+
+  /** Whether the chosen sprite has been added to the project. */
+  isInProject(): boolean {
+    const id = this.getValue();
+    return !id || state.spriteAssetIds.includes(id);
+  }
 }
 
-/** Picks a background asset from the project. */
+/** Picks a background from the library. */
 export class FieldBackground extends FieldDynamicDropdown {
   static fromJson(options: Blockly.FieldDropdownFromJsonConfig & { value?: string }) {
     return new FieldBackground(options.value ?? '');
@@ -125,18 +135,33 @@ export class FieldPath extends FieldDynamicDropdown {
   }
 }
 
-/** Picks one of the built-in sounds and plays it as a preview when chosen. */
+export function soundIcon(id: string): string {
+  return getSound(id)?.kind === 'tune' ? '🎵' : '🔊';
+}
+
+/** Picks one of the project's sounds and plays it as a preview when chosen. */
 export class FieldSound extends FieldDynamicDropdown {
   static fromJson(options: Blockly.FieldDropdownFromJsonConfig & { value?: string }) {
-    return new FieldSound(options.value ?? 'coin');
+    return new FieldSound(options.value ?? '');
   }
 
   protected options(): MenuOption[] {
-    return SOUNDS.map((s) => ['🔊 ' + s.name, s.id] as MenuOption);
+    return state.soundIds.map((id) => [`${soundIcon(id)} ${getSound(id)!.name}`, id] as MenuOption);
+  }
+
+  protected override labelFor(value: string): string {
+    const sound = getSound(value);
+    return sound ? `${soundIcon(value)} ${sound.name}` : value;
+  }
+
+  /** Whether the chosen sound has been added to the project. */
+  isInProject(): boolean {
+    const id = this.getValue();
+    return !id || state.soundIds.includes(id);
   }
 
   protected isValid(value: string): boolean {
-    return SOUNDS.some((s) => s.id === value);
+    return value === '' || SOUNDS.some((s) => s.id === value);
   }
 
   protected override onItemSelected_(menu: Blockly.Menu, menuItem: Blockly.MenuItem): void {
@@ -154,10 +179,6 @@ export class FieldSoundOrNone extends FieldSound {
 
   protected override options(): MenuOption[] {
     return [['no sound', ''], ...super.options()];
-  }
-
-  protected override isValid(value: string): boolean {
-    return value === '' || super.isValid(value);
   }
 }
 
