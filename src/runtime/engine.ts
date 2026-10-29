@@ -595,7 +595,10 @@ export class Game {
       }
     }
     // Every sprite of the starred character is a player.
-    for (const s of this.sprites) s.isPlayer = s.cls === 'character' && s.asset.id === this.levelPlayer;
+    for (const s of this.sprites) {
+      s.isPlayer = s.cls === 'character' && s.asset.id === this.levelPlayer;
+      this.fitPlayer(s);
+    }
     this.rebuildSolids();
     this.updateCamera(true);
   }
@@ -607,6 +610,9 @@ export class Game {
       return;
     }
     this.levelIndex = Math.max(0, index);
+    // Keys held while the level changes would otherwise keep moving the player in the new level.
+    this.keysDown.clear();
+    this.keysPressed.clear();
     for (const h of this.touchHandlers) h.pairs.clear();
     this.levelStartScore = this.score;
     try {
@@ -685,6 +691,21 @@ export class Game {
     const wasSolid = s.solid;
     s.asset = asset;
     if (wasSolid || s.solid) this.rebuildSolids();
+  }
+
+  /**
+   * Top-down players fill their whole space, so they line up with one-space corridors and their picture
+   * never overlaps a wall. Everywhere else sprites keep a slightly smaller box.
+   */
+  fitPlayer(s: Sprite): void {
+    const full = this.mode === 'topdown' && s.isPlayer;
+    const w = full ? CELL : CELL * 0.8;
+    const h = full ? CELL : CELL * 0.9;
+    if (s.solid || (s.w === w && s.h === h)) return;
+    const bottom = s.y + s.h / 2;
+    s.w = w;
+    s.h = h;
+    s.y = bottom - h / 2;
   }
 
   /** Creates a sprite in the space in front of `s`, facing the same way, and starts `path` on it. */
@@ -841,10 +862,34 @@ export class Game {
           this.playBuiltin('jump', 0.35);
         }
       } else {
-        s.vy = ((down ? 1 : 0) - (up ? 1 : 0)) * this.playerSpeed;
-        if (s.vy !== 0 && s.vx === 0) s.facing = s.vy < 0 ? 'up' : 'down';
+        const h = (right ? 1 : 0) - (left ? 1 : 0);
+        const v = (down ? 1 : 0) - (up ? 1 : 0);
+        s.vy = v * this.playerSpeed;
+        // Lane assist: moving along one axis keeps the player centred on the other, so it follows
+        // corridors and slides around corners instead of catching on them.
+        if (h && !v) s.vy = this.laneSteer(s, 'y', h);
+        else if (v && !h) s.vx = this.laneSteer(s, 'x', v);
+        if (v && !h) s.facing = v < 0 ? 'up' : 'down';
       }
     }
+  }
+
+  /**
+   * Velocity along `axis` that centres `s` on the nearer of the two grid lanes around it, preferring a lane
+   * whose next space (one step in `dir` along the other axis) is free.
+   */
+  private laneSteer(s: Sprite, axis: 'x' | 'y', dir: number): number {
+    const pos = axis === 'x' ? s.x : s.y;
+    const centre = (lane: number) => lane * CELL + CELL / 2;
+    const below = Math.floor((pos - CELL / 2) / CELL);
+    const lanes = [below, below + 1].sort((a, b) => Math.abs(centre(a) - pos) - Math.abs(centre(b) - pos));
+    const along = Math.floor((axis === 'x' ? s.y : s.x) / CELL) + dir;
+    const free = (lane: number) => {
+      const [x, y] = axis === 'x' ? [lane, along] : [along, lane];
+      return this.inBounds(x, y) && !this.solidAt(x, y, false);
+    };
+    const d = centre(lanes.find(free) ?? lanes[0]) - pos;
+    return Math.abs(d) <= this.playerSpeed ? d : Math.sign(d) * this.playerSpeed;
   }
 
   private integrate(s: Sprite): void {
@@ -1319,7 +1364,10 @@ export class GameApi {
   makePlayer(ref: SpriteRef): void {
     const next = this.refs(ref).filter((s) => s.cls === 'character');
     if (!next.length) return;
-    for (const s of this.g.sprites) s.isPlayer = next.includes(s);
+    for (const s of this.g.sprites) {
+      s.isPlayer = next.includes(s);
+      this.g.fitPlayer(s);
+    }
   }
   setGravity(ref: SpriteRef, on: boolean): void {
     this.refs(ref).forEach((s) => (s.gravity = !!on));

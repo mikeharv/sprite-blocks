@@ -58,7 +58,9 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   `throw` creates a sprite in front of the thrower with a path of its own (projectiles); `disappear` removes the
   sprite. "set path" blocks start a path without blocking the code that called them.
 * **Sprite classes** set the default behaviour:
-  * character: falls in platformer levels (unless it flies) and turns to face its movement. The character starred
+  * character: falls in platformer levels (unless it flies) and turns to face its movement. In top-down levels the
+    player fills its space and stays centred on the grid lines it isn't moving along, steering toward an open
+    corridor, so it follows mazes and slides around corners. The character starred
     in a level is the player: keyboard control, followed by the camera, has health. "make … the player" switches
     it at runtime. Class selectors such as "character" never include the player; use "the player" for that.
   * platform: one-way ground that can be jumped through from below.
