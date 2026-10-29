@@ -313,6 +313,8 @@ body {
 #sprites-view .library { padding: 12px 16px 24px; }
 .library-card .costumes { display: flex; gap: 2px; }
 .library-card .costumes img { width: 18px; height: 18px; }
+.library-card .join-preview { display: grid; image-rendering: pixelated; }
+.library-card .join-preview span { width: 18px; height: 18px; display: block; }
 .class-hint { margin: -4px 0 8px; }
 .sound-card .sound-icon { font-size: 28px; line-height: 40px; height: 40px; }
 

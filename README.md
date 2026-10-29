@@ -66,6 +66,19 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   * item: no built-in behaviour. Each item is drawn either behind platforms (trees, doors) or in front of them.
 * **Costumes:** a sprite with several costumes either animates while it moves (walkers) or all the time (coins,
   flags). Characters mirror their costume to face the way they move; planes and thrown daggers rotate instead.
+* **Joining textures:** ground blocks, ledges, cakes, walls and fences join up with neighbouring sprites of the
+  same kind. Water, ladders, candy canes and vines join in columns: a top piece over a repeated piece, for deep
+  water and tall ladders. Their costumes are the pieces (ends, edges and corners), and the level editor and the game pick the
+  piece for each space from its neighbours, so painting a row or a block draws one connected shape. Each
+  piece's file name lists the sides that have an edge (for example `grass_block-TL` is a top-left corner).
+  Where two sides join but the diagonal between them is empty, blocks get an inner corner: the art's own piece
+  for grass, sand and snow, otherwise a small step drawn in the texture's outline colour. Some pieces are made
+  from the art: the fence top middle and the closed mushroom top from halves of their end pieces, the pink cake
+  block's plain middle row from its bottom row, the stone wall's top and bottom edges from its own outline, the
+  sandstone and marble one-high and one-wide pieces from halves of their panel pieces, and the cloud and plank
+  singles from halves of their ends, and the fence's T-junctions, cross and lone post from its own corner, rail
+  and post pieces. Every row texture has a single, left end, middle and right end; every column texture has a
+  top and a piece below it; every block texture (including the fence) has all 16 pieces.
 * **Sounds:** only sounds added to the project appear in sound blocks, and blocks using a removed sound show a
   warning. The game plays some sounds by itself (jump, falling out, running out of health, winning, game over);
   the "set sound for … to …" block changes or silences them.
@@ -74,8 +87,6 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 * **Health:** losing health makes the player flash and ignore damage for a moment. At 0 health the level
   restarts, unless you use a "when health reaches 0" block. Falling out of the level costs 1 health and puts
   the player back at the start.
-* **Older saves** are upgraded on load: old class selectors are renamed, the old player sprite gets the star, and
-  every sound is added.
 
 ### Saving
 

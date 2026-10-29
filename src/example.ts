@@ -178,7 +178,7 @@ function coinRunLevel(): Level {
   const level: Level = { ...newLevel('Level 1'), cols: 50, rows: 9, background: 'bg_sky', player: 'alien_green' };
   const put = (x: number, y: number, asset: string) => (level.cells[cellKey(x, y)] = asset);
   const pits = new Set([14, 15, 31, 32]);
-  for (let x = 0; x < 50; x++) if (!pits.has(x)) put(x, 8, 'brick');
+  for (let x = 0; x < 50; x++) if (!pits.has(x)) put(x, 8, 'grass');
   for (let x = 7; x <= 12; x++) put(x, 5, 'plank');
   for (let x = 19; x <= 25; x++) put(x, 5, 'plank');
   for (let x = 35; x <= 40; x++) put(x, 4, 'mushroom_top');

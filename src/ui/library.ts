@@ -1,5 +1,5 @@
 // Sprites tab: choose which sprites and sounds are part of the project.
-import { ASSETS, SOUNDS, getAsset, getSound, imageUrl, thumbUrl, type SoundInfo } from '../assets';
+import { ASSETS, SOUNDS, cellBackground, cellLook, getAsset, getSound, imageUrl, thumbUrl, type SoundInfo } from '../assets';
 import { FieldSound, soundIcon } from '../blocks/fields';
 import type { SpriteAsset } from '../model';
 import { SPRITE_CLASSES } from '../model';
@@ -18,6 +18,14 @@ const CLASS_HINT: Record<SpriteAsset['cls'], string> = {
 };
 
 function describe(asset: SpriteAsset): string {
+  if (asset.join) {
+    const pieces = asset.join.edges.length;
+    const corners = asset.frames.length - pieces;
+    return (
+      `joins up ${{ row: 'in rows', column: 'in columns', grid: 'in rows and columns' }[asset.join.connect]} · ${pieces} pieces` +
+      (corners ? ` + ${corners} inner corners` : '')
+    );
+  }
   const n = asset.frames.length;
   const anim = n === 1 ? '1 costume' : `${n} costumes, ${asset.animate === 'move' ? 'animate when moving' : 'always animate'}`;
   const extras = [anim, TURN_LABEL[asset.turn]];
@@ -37,6 +45,23 @@ function soundUses(id: string): number {
     }
   }
   return n;
+}
+
+/** A small joined-up shape (a row or a block) showing how a texture fits together. */
+function joinPreview(asset: SpriteAsset): HTMLElement {
+  const shape = { row: ['###'], column: ['#', '#', '#'], grid: ['##.', '###', '###'] }[asset.join!.connect];
+  const cells: Record<string, string> = {};
+  shape.forEach((line, y) => [...line].forEach((c, x) => c === '#' && (cells[x + ',' + y] = asset.id)));
+  const preview = el('span', { className: 'join-preview' });
+  preview.style.gridTemplateColumns = `repeat(${shape[0].length}, 18px)`;
+  shape.forEach((line, y) =>
+    [...line].forEach((_, x) => {
+      const tile = el('span');
+      tile.style.background = cellBackground(cellLook(cells, x, y), 18);
+      preview.append(tile);
+    }),
+  );
+  return preview;
 }
 
 export class AssetLibrary {
@@ -85,8 +110,9 @@ export class AssetLibrary {
   }
 
   private card(asset: SpriteAsset, isSelected: boolean): HTMLElement {
-    const costumes =
-      asset.frames.length > 1
+    const costumes = asset.join
+      ? joinPreview(asset)
+      : asset.frames.length > 1
         ? el(
             'span',
             { className: 'costumes' },

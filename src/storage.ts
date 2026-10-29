@@ -66,42 +66,16 @@ export function loadAutosave(): Project | null {
   }
 }
 
-/** Sprite selectors used before players, hazards, collectibles, scenery and goals were merged. */
-const LEGACY_SELECTORS: Record<string, string> = {
-  'class:player': 'player',
-  'class:hazard': 'class:character',
-  'class:collectible': 'class:item',
-  'class:scenery': 'class:item',
-  'class:goal': 'class:item',
-};
-const LEGACY_PLAYERS = [
-  'alien_green', 'alien_blue', 'alien_pink', 'alien_yellow', 'alien_beige',
-  'hero', 'knight', 'wizard', 'princess', 'plane_blue', 'plane_red',
-];
-
-/** Upgrades projects saved before sounds were chosen per project and the sprite classes were merged. */
-function migrate(p: Project): void {
-  p.sounds = SOUNDS.map((s) => s.id);
-  let main = JSON.stringify(p.main ?? {});
-  for (const [from, to] of Object.entries(LEGACY_SELECTORS)) main = main.split(`"${from}"`).join(`"${to}"`);
-  p.main = JSON.parse(main);
-  for (const level of p.levels) {
-    const ids = Object.values(level.cells ?? {});
-    level.player ??= LEGACY_PLAYERS.find((id) => ids.includes(id)) ?? null;
-  }
-}
-
 /** Checks the basic shape of a project and drops references to unknown assets. */
 export function validateProject(data: unknown): Project {
   const p = data as Project;
   if (!p || p.format !== 'sprite-blocks' || !Array.isArray(p.levels) || !p.levels.length) {
     throw new Error('This file is not a Sprite Blocks project.');
   }
-  if (!Array.isArray(p.sounds)) migrate(p);
+  p.sounds ??= [];
   const known = (id: string) => !!getAsset(id);
   const missing = new Set<string>();
-  // Backgrounds used to be added to projects; they are now chosen per level from the whole library.
-  p.assets = (p.assets ?? []).filter((id) => getSprite(id) || (!known(id) && missing.add(id), false));
+  p.assets = (p.assets ?? []).filter((id) => getSprite(id) || (missing.add(id), false));
   p.sounds = p.sounds.filter((id) => SOUNDS.some((s) => s.id === id));
   for (const level of p.levels) {
     for (const [key, id] of Object.entries(level.cells ?? {})) {

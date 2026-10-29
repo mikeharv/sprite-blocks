@@ -3,7 +3,7 @@
 // The engine owns sprites, physics, paths, events and rendering. Generated user code talks to it
 // through the `GameApi` object (`$g` in generated code); generated path code uses `PathContext` (`$p`).
 import p5 from 'p5';
-import { allImageNames, getBackground, getSprite, imageUrl } from '../assets';
+import { allImageNames, cornerRects, getBackground, getSprite, imageUrl, joinPiece, type JoinPiece } from '../assets';
 import type { GameMode, Level, SpriteAsset, ViewSize } from '../model';
 import { viewCols } from '../model';
 import { playSound } from './audio';
@@ -362,6 +362,8 @@ export class Game {
   private ready = false;
   sprites: Sprite[] = [];
   private solidGrid = new Map<string, Sprite[]>();
+  /** "col,row" -> asset id of joinable sprites, rebuilt every frame for drawing. */
+  private joined = new Map<string, string>();
 
   // Level state
   levels: Level[] = [];
@@ -1008,6 +1010,9 @@ export class Game {
     p.scale(scale);
     p.translate(-Math.round(this.cam.x * scale) / scale, -Math.round(this.cam.y * scale) / scale);
     p.noStroke();
+    // Where joinable textures are, so each piece can match its neighbours (sprites can move or be created).
+    this.joined.clear();
+    for (const s of this.sprites) if (s.asset.join && !s.removed) this.joined.set(s.col + ',' + s.row, s.asset.id);
     const sorted = [...this.sprites].sort((a, b) => drawLayer(a) - drawLayer(b));
     for (const s of sorted) if (!s.removed && s.visible) this.drawSprite(s);
     p.pop();
@@ -1065,7 +1070,11 @@ export class Game {
     if (s.invincible > 0 && Math.floor(s.invincible / 5) % 2 === 0) return;
     const a = s.asset;
     let frameIndex = 0;
-    if (a.frames.length > 1) {
+    let piece: JoinPiece | null = null;
+    if (a.join) {
+      piece = joinPiece(a, (dx, dy) => this.joined.get(s.col + dx + ',' + (s.row + dy)) === a.id);
+      frameIndex = piece.frame;
+    } else if (a.frames.length > 1) {
       if (a.animate === 'move') {
         if (this.gravityActive(s) && !s.onGround) frameIndex = 1;
         else if (s.animTime > 0) frameIndex = Math.floor(s.animTime / 8) % a.frames.length;
@@ -1091,6 +1100,15 @@ export class Game {
     const w = aspect >= 1 ? CELL : CELL * aspect;
     const h = aspect >= 1 ? CELL / aspect : CELL;
     p.image(img, -w / 2, CELL / 2 - h, w, h);
+    if (piece?.corners.length && a.join?.outline) {
+      // Inner corners: small steps in the outline colour, in the texture's own pixel size.
+      const unit = CELL / (a.join.pixels ?? 18);
+      p.noStroke();
+      p.fill(a.join.outline);
+      for (const [x, y, rw, rh] of cornerRects(piece.corners, a.join.pixels ?? 18)) {
+        p.rect(-CELL / 2 + x * unit, -CELL / 2 + y * unit, rw * unit, rh * unit);
+      }
+    }
     p.pop();
   }
 
@@ -1266,21 +1284,6 @@ export class GameApi {
   throwFrom(ref: SpriteRef, assetId: string, path: string): Sprite[] {
     return this.refs(ref)
       .map((s) => this.g.throwFrom(s, assetId, path))
-      .filter((s): s is Sprite => !!s);
-  }
-  spawnAtLocation(assetId: string, x: number, y: number): Sprite | null {
-    return this.g.spawn(assetId, x, y);
-  }
-  spawnAt(assetId: string, ref: SpriteRef): Sprite[] {
-    return this.refs(ref)
-      .map((s) => this.g.spawn(assetId, s.col, s.row))
-      .filter((s): s is Sprite => !!s);
-  }
-  spawnRelative(assetId: string, ref: SpriteRef, dir: Dir, n: number): Sprite[] {
-    const [dx, dy] = DIRS[dir] ?? [0, 0];
-    const k = Math.floor(Number(n) || 0);
-    return this.refs(ref)
-      .map((s) => this.g.spawn(assetId, s.col + dx * k, s.row + dy * k))
       .filter((s): s is Sprite => !!s);
   }
   remove(ref: SpriteRef): void {

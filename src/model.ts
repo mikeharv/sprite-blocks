@@ -45,7 +45,26 @@ export interface SpriteAsset {
   gravity?: boolean;
   /** Items only: drawn behind platforms ('back', e.g. trees and doors) or in front of them (default). */
   layer?: 'back' | 'front';
+  /**
+   * A texture that joins up with neighbouring sprites of the same kind. Each costume is one piece, and
+   * `edges[i]` lists the sides (T, R, B, L) that costume `i` draws an edge on. 'row' textures join left and
+   * right only, 'column' textures up and down only, and 'grid' textures in all four directions.
+   */
+  join?: {
+    connect: 'row' | 'column' | 'grid';
+    edges: string[];
+    /**
+     * Grid textures: a space whose two neighbours around a corner match but whose diagonal neighbour does not
+     * gets an inner corner. Pieces drawn with one (index into `frames`) are used where the art has them;
+     * otherwise a small step in the `outline` colour is drawn, sized for art `pixels` wide.
+     */
+    inner?: Partial<Record<Corner, number>>;
+    outline?: string;
+    pixels?: number;
+  };
 }
+
+export type Corner = 'TL' | 'TR' | 'BR' | 'BL';
 
 export interface BackgroundAsset {
   id: string;

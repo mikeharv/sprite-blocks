@@ -182,41 +182,6 @@ export const MAIN_BLOCKS = [
     style: 'sprite_blocks',
     tooltip: 'Gives keyboard control to a character. The old player becomes an ordinary character.',
   },
-  // Older creation and movement blocks, kept so saved games still load. Not in the toolbox.
-  {
-    type: 'sb_create_at',
-    message0: 'create %1 at %2',
-    args0: [{ type: 'field_sprite_asset', name: 'ASSET' }, { type: 'field_grid_location', name: 'LOC', value: '0,0' }],
-    previousStatement: null,
-    nextStatement: null,
-    style: 'sprite_blocks',
-    tooltip: 'Creates a sprite at a grid location in the level.',
-  },
-  {
-    type: 'sb_create_at_sprite',
-    message0: 'create %1 at location of %2',
-    args0: [{ type: 'field_sprite_asset', name: 'ASSET' }, sprite()],
-    inputsInline: true,
-    previousStatement: null,
-    nextStatement: null,
-    style: 'sprite_blocks',
-    tooltip: 'Creates a sprite in the same grid space as each given sprite.',
-  },
-  {
-    type: 'sb_create_relative',
-    message0: 'create %1 %2 spaces %3 of %4',
-    args0: [
-      { type: 'field_sprite_asset', name: 'ASSET' },
-      number('N'),
-      { type: 'field_dropdown', name: 'DIR', options: DIRECTIONS },
-      sprite(),
-    ],
-    inputsInline: true,
-    previousStatement: null,
-    nextStatement: null,
-    style: 'sprite_blocks',
-    tooltip: 'Creates a sprite a number of grid spaces away from another sprite.',
-  },
   {
     type: 'sb_remove',
     message0: 'remove %1',
@@ -234,15 +199,6 @@ export const MAIN_BLOCKS = [
     nextStatement: null,
     style: 'sprite_blocks',
     tooltip: 'Changes how a sprite looks. Its class (character, item…) changes to match the new costume.',
-  },
-  {
-    type: 'sb_move_to',
-    message0: 'move %1 to %2',
-    args0: [sprite(), { type: 'field_grid_location', name: 'LOC', value: '0,0' }],
-    inputsInline: true,
-    previousStatement: null,
-    nextStatement: null,
-    style: 'sprite_blocks',
   },
   {
     type: 'sb_bounce',
@@ -579,19 +535,8 @@ const generators: Record<string, (b: Blockly.Block, g: Gen) => string | [string,
     `$g.throwFrom(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('ASSET'))}, ${q(b.getFieldValue('PATH'))});\n`,
   sb_make_player: (b, g) => `$g.makePlayer(${val(b, g, 'SPRITE')});\n`,
   sb_closest: (b, g) => [`$g.closest(${q(b.getFieldValue('SELECTOR'))}, ${location_(b, g)})`, Order.FUNCTION_CALL],
-  sb_create_at: (b) => {
-    const [x, y] = loc(b);
-    return `$g.spawn(${q(b.getFieldValue('ASSET'))}, ${x}, ${y});\n`;
-  },
-  sb_create_at_sprite: (b, g) => `$g.spawnAt(${q(b.getFieldValue('ASSET'))}, ${val(b, g, 'SPRITE')});\n`,
-  sb_create_relative: (b, g) =>
-    `$g.spawnRelative(${q(b.getFieldValue('ASSET'))}, ${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('DIR'))}, ${num(b, g, 'N')});\n`,
   sb_remove: (b, g) => `$g.remove(${val(b, g, 'SPRITE')});\n`,
   sb_set_costume: (b, g) => `$g.setCostume(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('ASSET'))});\n`,
-  sb_move_to: (b, g) => {
-    const [x, y] = loc(b);
-    return `$g.moveTo(${val(b, g, 'SPRITE')}, ${x}, ${y});\n`;
-  },
   sb_bounce: (b, g) => `$g.bounce(${val(b, g, 'SPRITE')}, ${Number(b.getFieldValue('HEIGHT')) || 1.5});\n`,
   sb_face: (b, g) => `$g.face(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('DIR'))});\n`,
   sb_set_gravity: (b, g) => `$g.setGravity(${val(b, g, 'SPRITE')}, ${b.getFieldValue('ON')});\n`,

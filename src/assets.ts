@@ -1,5 +1,5 @@
 // Built-in asset library. Artwork and sounds are CC0 assets by Kenney (www.kenney.nl).
-import type { Asset, BackgroundAsset, SpriteAsset, SpriteClass } from './model';
+import type { Asset, BackgroundAsset, Corner, SpriteAsset, SpriteClass } from './model';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
 
@@ -47,6 +47,45 @@ const floats: Partial<SpriteAsset> = { gravity: false };
 /** Drawn behind platforms and characters. */
 const back: Partial<SpriteAsset> = { layer: 'back' };
 
+// Pieces of joinable textures, named by the sides that have an edge. Image files are `<texture>-<piece>`.
+/** Single, left end, middle, right end. */
+const ROW = ['TRBL', 'TBL', 'TB', 'TRB'];
+/** A top piece and the piece repeated below it (deep water, ladder rungs, a stalk). */
+const COLUMN = ['T', ''];
+/** Rows of a 4×4 sheet: a one-high row, then the top, middle and bottom rows of a taller block. */
+const GRID = ['TRBL', 'TBL', 'TB', 'TRB', 'TRL', 'TL', 'T', 'TR', 'RL', 'L', '', 'R', 'RBL', 'BL', 'B', 'RB'];
+
+const CORNERS: Corner[] = ['TL', 'TR', 'BR', 'BL'];
+
+/**
+ * A sprite whose costume is chosen from its neighbours, so painted rows and blocks join up. Grid textures
+ * name their outline colour for drawn inner corners, and can include inner-corner pieces from the art.
+ */
+function joined(
+  id: string,
+  name: string,
+  cls: SpriteClass,
+  texture: string,
+  connect: 'row' | 'column' | 'grid',
+  pieces: string[],
+  corners: { outline?: string; artCorners?: boolean; pixels?: number } & Partial<SpriteAsset> = {},
+): SpriteAsset {
+  const frames = pieces.map((p) => `${texture}-${p || 'none'}`);
+  const inner: Partial<Record<Corner, number>> = {};
+  if (corners.artCorners) {
+    for (const c of CORNERS) inner[c] = frames.push(`${texture}-inner-${c}`) - 1;
+  }
+  const { outline, artCorners: _art, pixels, ...extra } = corners;
+  return sprite(id, name, cls, frames, {
+    ...extra,
+    join: { connect, edges: pieces, inner, outline, pixels: pixels ?? 18 },
+  });
+}
+
+/** Outline colour of the Pixel Platformer packs, and those textures' dirt inner-corner pieces. */
+const PIXEL_OUTLINE = { outline: '#434a5f' };
+const DIRT_CORNERS = { ...PIXEL_OUTLINE, artCorners: true };
+
 export const ASSETS: Asset[] = [
   // Characters. Star one in the level editor to make it the player.
   // People
@@ -84,39 +123,44 @@ export const ASSETS: Asset[] = [
   sprite('plane_red', 'red plane', 'character', ['plane_red'], { turn: 'rotate', facing: 'up', ...floats }),
   sprite('plane_grey', 'grey plane', 'character', ['plane_grey'], { turn: 'rotate', facing: 'down', ...floats }),
 
-  // Platforms: stand on top, jump up through from below.
-  sprite('grass_ledge', 'grassy ledge', 'platform', ['grass_ledge']),
-  sprite('mushroom_top', 'mushroom top', 'platform', ['mushroom_top']),
-  sprite('cloud', 'cloud', 'platform', ['cloud']),
-  sprite('plank', 'wooden plank', 'platform', ['plank']),
-  sprite('fence_wood', 'fence top', 'platform', ['fence_wood']),
-  sprite('cake_pink', 'pink cake', 'platform', ['cake_pink']),
-  sprite('cake_choc', 'chocolate cake', 'platform', ['cake_choc']),
+  // Platforms: stand on top, jump up through from below. Most join up into longer ledges.
+  joined('grass_ledge', 'grassy ledge', 'platform', 'grass_ledge', 'row', ROW),
+  joined('sand_ledge', 'sandy ledge', 'platform', 'sand_ledge', 'row', ROW),
+  joined('snow_ledge', 'snowy ledge', 'platform', 'snow_ledge', 'row', ROW),
+  joined('mushroom_top', 'mushroom top', 'platform', 'mushroom_top', 'row', ROW),
+  joined('cloud', 'cloud', 'platform', 'cloud', 'row', ROW),
+  joined('plank', 'wooden plank', 'platform', 'plank', 'row', ROW),
+  joined('fence_wood', 'fence top', 'platform', 'fence_wood', 'row', ROW),
+  joined('cake_pink', 'pink cake', 'platform', 'cake_pink', 'row', ROW),
+  joined('cake_choc', 'chocolate cake', 'platform', 'cake_choc', 'row', ROW),
 
   // Obstacles: solid on every side.
-  // Ground
-  sprite('grass', 'grass block', 'obstacle', ['grass']),
-  sprite('dirt', 'dirt', 'obstacle', ['dirt']),
-  sprite('rock', 'rock', 'obstacle', ['rock']),
-  // Bricks and walls
+  // Joining textures: paint rows, columns or any shape and the pieces join up.
+  joined('grass', 'grass block', 'obstacle', 'grass_block', 'grid', GRID, DIRT_CORNERS),
+  joined('sand_block', 'sand block', 'obstacle', 'sand_block', 'grid', GRID, DIRT_CORNERS),
+  joined('snow_block', 'snow block', 'obstacle', 'snow_block', 'grid', GRID, DIRT_CORNERS),
+  joined('farm_block', 'farm ground', 'obstacle', 'farm_block', 'grid', GRID, PIXEL_OUTLINE),
+  joined('wall_stone', 'stone wall', 'obstacle', 'wall_stone', 'grid', GRID, { outline: '#3f2631', pixels: 16 }),
+  joined('sandstone', 'sandstone block', 'obstacle', 'sandstone', 'grid', GRID, { outline: '#6f3e43' }),
+  joined('marble', 'marble block', 'obstacle', 'marble', 'grid', GRID, { outline: '#565656' }),
+  joined('cake_block', 'pink cake block', 'obstacle', 'cake_block', 'grid', GRID, PIXEL_OUTLINE),
+  joined('cake_choc_block', 'chocolate cake block', 'obstacle', 'cake_choc_block', 'grid', GRID, PIXEL_OUTLINE),
+  joined('fence', 'fence', 'obstacle', 'fence', 'grid', GRID, { pixels: 16 }),
+  // Single blocks
+  sprite('stone_block', 'stone block', 'obstacle', ['stone_block']),
   sprite('brick', 'brick', 'obstacle', ['brick']),
   sprite('brick_small', 'small bricks', 'obstacle', ['brick_small']),
   sprite('brick_dark', 'dark bricks', 'obstacle', ['brick_dark']),
-  sprite('stone_block', 'stone block', 'obstacle', ['stone_block']),
-  sprite('wall', 'brick wall', 'obstacle', ['wall']),
-  sprite('wall_stone', 'stone wall', 'obstacle', ['wall_stone']),
-  // Blocks
   sprite('block_yellow', 'yellow block', 'obstacle', ['block_yellow']),
   sprite('block_lock', 'locked block', 'obstacle', ['block_lock']),
-  sprite('cake_block', 'cake block', 'obstacle', ['cake_block']),
   // Containers
   sprite('crate', 'crate', 'obstacle', ['crate']),
   sprite('barrel', 'barrel', 'obstacle', ['barrel']),
   sprite('chest', 'chest', 'obstacle', ['chest']),
   sprite('chest_open', 'open chest', 'obstacle', ['chest_open']),
-  // Garden
+  // Outdoors
   sprite('hedge', 'hedge', 'obstacle', ['hedge']),
-  sprite('fence', 'fence', 'obstacle', ['fence']),
+  sprite('rock', 'rock', 'obstacle', ['rock']),
 
   // Items: things to collect, throw, avoid, reach or decorate with.
   // Treasure
@@ -130,7 +174,7 @@ export const ASSETS: Asset[] = [
   // Food
   sprite('donut', 'donut', 'item', ['donut']),
   sprite('ice_cream', 'ice cream', 'item', ['ice_cream']),
-  sprite('candy_cane', 'candy cane', 'item', ['candy_cane']),
+  joined('candy_cane', 'candy cane', 'item', 'candy_cane', 'column', COLUMN),
   sprite('pizza', 'pizza', 'item', ['pizza']),
   sprite('tomato', 'tomato', 'item', ['tomato']),
   sprite('carrot', 'carrot', 'item', ['carrot']),
@@ -145,7 +189,7 @@ export const ASSETS: Asset[] = [
   sprite('dagger', 'dagger', 'item', ['dagger'], { turn: 'rotate', facing: 'up' }),
   // Traps
   sprite('spikes', 'spikes', 'item', ['spikes']),
-  sprite('water', 'water', 'item', ['water']),
+  joined('water', 'water', 'item', 'water', 'column', COLUMN),
   sprite('trap', 'floor trap', 'item', ['trap']),
   sprite('spring', 'spring', 'item', ['spring']),
   // Doors and goals
@@ -155,16 +199,16 @@ export const ASSETS: Asset[] = [
   sprite('flag', 'flag', 'item', anim('flag', 2), back),
   // Plants
   sprite('tree', 'tree', 'item', ['tree'], back),
-  sprite('tree_round', 'round tree', 'item', ['tree_round'], back),
+  sprite('tree_round', 'small tree', 'item', ['tree_round'], back),
   sprite('cactus', 'cactus', 'item', ['cactus'], back),
-  sprite('plant', 'plant', 'item', ['plant'], back),
+  joined('plant', 'vine', 'item', 'plant', 'column', COLUMN, back),
   sprite('sprout', 'sprout', 'item', ['sprout'], back),
   sprite('mushroom', 'mushroom', 'item', ['mushroom'], back),
   sprite('toadstools', 'toadstools', 'item', ['toadstools'], back),
   // Decorations
   sprite('sign', 'sign', 'item', ['sign'], back),
   sprite('sign_arrow', 'arrow sign', 'item', ['sign_arrow'], back),
-  sprite('ladder', 'ladder', 'item', ['ladder'], back),
+  joined('ladder', 'ladder', 'item', 'ladder', 'column', COLUMN, back),
   sprite('beehive', 'beehive', 'item', ['beehive'], back),
   sprite('snowman', 'snowman', 'item', ['snowman'], back),
 
@@ -239,6 +283,118 @@ export function getBackground(id: string | null | undefined): BackgroundAsset | 
 }
 
 export const BACKGROUNDS = ASSETS.filter((a): a is BackgroundAsset => a.kind === 'background');
+
+/** The piece a joinable sprite wears, and any inner corners to draw over it. */
+export interface JoinPiece {
+  frame: number;
+  corners: Corner[];
+}
+
+const DIAGONALS: Record<Corner, [number, number]> = { TL: [-1, -1], TR: [1, -1], BR: [1, 1], BL: [-1, 1] };
+
+/**
+ * Chooses the piece a joinable sprite should wear, given whether the neighbouring space at (dx, dy) holds
+ * the same texture. Prefers a piece with an extra edge over one with a missing edge, so a shape the art does
+ * not cover still looks closed. Grid textures also get inner corners where two sides join but the diagonal
+ * between them is empty.
+ */
+export function joinPiece(asset: SpriteAsset, same: (dx: number, dy: number) => boolean): JoinPiece {
+  const join = asset.join;
+  if (!join) return { frame: 0, corners: [] };
+  const grid = join.connect === 'grid';
+  const vertical = join.connect !== 'row';
+  const horizontal = join.connect !== 'column';
+  const wantEdge: Record<string, boolean> = {
+    T: !(vertical && same(0, -1)),
+    R: !(horizontal && same(1, 0)),
+    B: !(vertical && same(0, 1)),
+    L: !(horizontal && same(-1, 0)),
+  };
+  // Only the sides a texture joins on decide its piece.
+  const sides = grid ? 'TRBL' : vertical ? 'TB' : 'RL';
+  let frame = 0;
+  let bestCost = Infinity;
+  join.edges.forEach((edges, i) => {
+    let cost = 0;
+    for (const side of sides) {
+      const has = edges.includes(side);
+      if (wantEdge[side] && !has) cost += 3;
+      else if (!wantEdge[side] && has) cost += 2;
+    }
+    if (cost < bestCost) {
+      frame = i;
+      bestCost = cost;
+    }
+  });
+  if (!grid) return { frame, corners: [] };
+  const corners = (Object.keys(DIAGONALS) as Corner[]).filter((c) => {
+    const [dx, dy] = DIAGONALS[c];
+    return same(dx, 0) && same(0, dy) && !same(dx, dy);
+  });
+  // The art's own inner-corner piece fits a middle piece with exactly one inner corner.
+  const art = corners.length === 1 ? join.inner?.[corners[0]] : undefined;
+  if (art !== undefined && join.edges[frame] === '') return { frame: art, corners: [] };
+  return { frame, corners: join.outline ? corners : [] };
+}
+
+/** Index of the costume a joinable sprite should wear (see joinPiece). */
+export function joinFrame(asset: SpriteAsset, same: (dx: number, dy: number) => boolean): number {
+  return joinPiece(asset, same).frame;
+}
+
+/**
+ * Rectangles, in art pixels from the cell's top-left, that draw the given inner corners: the same small step
+ * the art uses (a corner pixel and the pixel beside it in each direction).
+ */
+export function cornerRects(corners: Corner[], pixels: number): [number, number, number, number][] {
+  const far = pixels - 2;
+  const rects: [number, number, number, number][] = [];
+  for (const c of corners) {
+    const x = c === 'TL' || c === 'BL' ? 0 : far;
+    const y = c === 'TL' || c === 'TR' ? 0 : far;
+    const cx = c === 'TL' || c === 'BL' ? 0 : pixels - 1;
+    const cy = c === 'TL' || c === 'TR' ? 0 : pixels - 1;
+    rects.push([x, cy, 2, 1], [cx, y, 1, 2]);
+  }
+  return rects;
+}
+
+/** What a level cell shows: its image, and inner corners for joinable textures. */
+export interface CellLook {
+  image: string;
+  corners: Corner[];
+  outline?: string;
+  pixels: number;
+}
+
+/** Image and inner corners for the sprite in a level cell. */
+export function cellLook(cells: Record<string, string>, x: number, y: number): CellLook | undefined {
+  const asset = getSprite(cells[x + ',' + y]);
+  if (!asset) return undefined;
+  const piece = joinPiece(asset, (dx, dy) => cells[x + dx + ',' + (y + dy)] === asset.id);
+  return {
+    image: asset.frames[piece.frame],
+    corners: piece.corners,
+    outline: asset.join?.outline,
+    pixels: asset.join?.pixels ?? 18,
+  };
+}
+
+/** CSS background layers that draw a cell look at `size` pixels: corner steps over the image. */
+export function cellBackground(look: CellLook | undefined, size: number): string {
+  if (!look) return '';
+  const unit = size / look.pixels;
+  const layers = cornerRects(look.corners, look.pixels).map(
+    ([x, y, w, h]) =>
+      `linear-gradient(${look.outline}, ${look.outline}) ${x * unit}px ${y * unit}px / ${w * unit}px ${h * unit}px no-repeat`,
+  );
+  return [...layers, `url(${imageUrl(look.image)}) center / contain no-repeat`].join(', ');
+}
+
+/** Image for the sprite in a level cell, choosing the joined piece for joinable textures. */
+export function cellImage(cells: Record<string, string>, x: number, y: number): string | undefined {
+  return cellLook(cells, x, y)?.image;
+}
 
 export function thumbUrl(asset: Asset): string {
   if (asset.kind === 'sprite') return imageUrl(asset.frames[0]);

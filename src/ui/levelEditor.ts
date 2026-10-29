@@ -1,5 +1,5 @@
 // Level editor: a scrollable DOM grid for placing sprites, plus level list and settings.
-import { BACKGROUNDS, getAsset, getBackground, getSprite, imageUrl, thumbUrl } from '../assets';
+import { BACKGROUNDS, cellBackground, cellLook, getAsset, getBackground, getSprite, imageUrl, thumbUrl } from '../assets';
 import type { GameMode, Level, ViewSize } from '../model';
 import { BACKGROUND_COLORS, SPRITE_CLASSES, cellKey, newLevel, parseCellKey, uid, viewCols } from '../model';
 import { state } from '../state';
@@ -380,7 +380,7 @@ export class LevelEditor {
         const cell = el('div', { className: 'cell' });
         cell.dataset.x = String(x);
         cell.dataset.y = String(y);
-        this.paintCell(cell, lvl.cells[cellKey(x, y)]);
+        this.paintCell(cell, x, y);
         this.cells.push(cell);
         frag.append(cell);
       }
@@ -404,9 +404,10 @@ export class LevelEditor {
     style.backgroundBlendMode = bg?.tint ? 'multiply' : '';
   }
 
-  private paintCell(cell: HTMLElement, assetId: string | undefined): void {
+  private paintCell(cell: HTMLElement, x: number, y: number): void {
+    const assetId = this.level.cells[cellKey(x, y)];
     const asset = getAsset(assetId);
-    cell.style.backgroundImage = asset ? `url(${thumbUrl(asset)})` : '';
+    cell.style.background = cellBackground(cellLook(this.level.cells, x, y), this.cellSize - 1);
     cell.title = asset ? asset.name + (assetId === this.level.player ? ' (player)' : '') : '';
     cell.classList.toggle('player', !!assetId && assetId === this.level.player);
   }
@@ -474,7 +475,10 @@ export class LevelEditor {
       lvl.player = value;
       this.renderPalette();
     }
-    this.paintCell(this.cells[y * lvl.cols + x], value);
+    // Neighbours of joinable textures may need a different piece now.
+    for (const [cx, cy] of [[x, y], [x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (cx >= 0 && cy >= 0 && cx < lvl.cols && cy < lvl.rows) this.paintCell(this.cells[cy * lvl.cols + cx], cx, cy);
+    }
     this.dirty = true;
   }
 

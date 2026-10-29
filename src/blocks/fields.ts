@@ -1,6 +1,6 @@
 // Custom Blockly fields. Each is registered so blocks can reference it from standard JSON definitions.
 import * as Blockly from 'blockly/core';
-import { SOUNDS, getAsset, getSound, getSprite, thumbUrl } from '../assets';
+import { SOUNDS, cellImage, getAsset, getSound, getSprite, imageUrl, thumbUrl } from '../assets';
 import { SPRITE_CLASSES, parseCellKey } from '../model';
 import { state } from '../state';
 import { pathNames } from './path_registry';
@@ -239,9 +239,9 @@ export class FieldGridLocation extends Blockly.Field<string> {
         const cell = document.createElement('button');
         cell.type = 'button';
         cell.className = 'grid-picker-cell';
-        const assetId = level.cells[x + ',' + y];
-        const asset = getAsset(assetId);
-        if (asset) cell.style.backgroundImage = `url(${thumbUrl(asset)})`;
+        const asset = getAsset(level.cells[x + ',' + y]);
+        const image = cellImage(level.cells, x, y);
+        if (image) cell.style.backgroundImage = `url(${imageUrl(image)})`;
         if (x === cx && y === cy) cell.classList.add('selected');
         cell.title = `${x}, ${y}${asset ? ' – ' + asset.name : ''}`;
         cell.addEventListener('mouseenter', () => (hover.textContent = cell.title));
