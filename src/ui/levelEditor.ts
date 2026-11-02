@@ -46,7 +46,12 @@ const MAX_SIZE = 200;
 export class LevelEditor {
   private brush: string = ERASER;
   private cellSize = 36;
-  private painting: 'paint' | 'erase' | null = null;
+  /**
+   * - paint: place the brush sprite.
+   * - erase: clear every space (eraser or right-click).
+   * - unpaint: clear only spaces holding the brush sprite (a stroke that starts on a matching sprite).
+   */
+  private painting: 'paint' | 'erase' | 'unpaint' | null = null;
   private lastCell: [number, number] | null = null;
   private dirty = false;
   private cells: HTMLElement[] = [];
@@ -443,7 +448,9 @@ export class LevelEditor {
     if (!pos || (e.button !== 0 && e.button !== 2)) return;
     e.preventDefault();
     this.grid.setPointerCapture(e.pointerId);
-    this.painting = e.button === 2 || this.brush === ERASER ? 'erase' : 'paint';
+    if (e.button === 2 || this.brush === ERASER) this.painting = 'erase';
+    // Starting on a space that already holds the brush sprite toggles it off, and the drag keeps clearing it.
+    else this.painting = this.level.cells[cellKey(...pos)] === this.brush ? 'unpaint' : 'paint';
     this.lastCell = pos;
     this.applyBrush(...pos);
   }
@@ -466,7 +473,8 @@ export class LevelEditor {
   private applyBrush(x: number, y: number): void {
     const lvl = this.level;
     const key = cellKey(x, y);
-    const value = this.painting === 'erase' ? undefined : this.brush;
+    if (this.painting === 'unpaint' && lvl.cells[key] !== this.brush) return;
+    const value = this.painting === 'paint' ? this.brush : undefined;
     if (lvl.cells[key] === value) return;
     if (value) lvl.cells[key] = value;
     else delete lvl.cells[key];
@@ -496,8 +504,8 @@ export class LevelEditor {
   private statusText(): string {
     const n = Object.keys(this.level.cells).length;
     return (
-      `${this.level.cols}×${this.level.rows} spaces · ${n} sprites · Drag to paint, right-click or use the eraser ` +
-      'to remove. ★ marks the player.'
+      `${this.level.cols}×${this.level.rows} spaces · ${n} sprites · Drag to paint. Start on the same sprite to ` +
+      'remove it instead. Right-click or the eraser removes anything. ★ marks the player.'
     );
   }
 }
