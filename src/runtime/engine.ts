@@ -304,6 +304,25 @@ export class PathContext {
     for (let i = 0; i < frames; i++) yield;
   }
 
+  /** The space this sprite is in. */
+  position(axis: 'x' | 'y'): number {
+    return axis === 'y' ? this.sprite.row : this.sprite.col;
+  }
+
+  /** The space the player is in, or -1 without a player. */
+  playerPosition(axis: 'x' | 'y'): number {
+    const p = this.game.api.player();
+    if (!p) return -1;
+    return axis === 'y' ? p.row : p.col;
+  }
+
+  /** Grid steps (across plus up or down) to the player; Infinity without a player, so "near" checks fail. */
+  playerDistance(): number {
+    const p = this.game.api.player();
+    if (!p) return Infinity;
+    return Math.abs(p.col - this.sprite.col) + Math.abs(p.row - this.sprite.row);
+  }
+
   /** Creates a sprite in the space in front of this one, facing the same way, and starts a path on it. */
   throw(assetId: string, path: string): void {
     this.game.throwFrom(this.sprite, assetId, path);

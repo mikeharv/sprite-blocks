@@ -10,45 +10,72 @@ const player = { block: { type: 'sb_player' } };
 const thisSprite = { block: { type: 'sb_this_sprite' } };
 const otherSprite = { block: { type: 'sb_other_sprite' } };
 
+/**
+ * Block colours: bright hues spread around the colour wheel. Every category on the same workspace is chosen to
+ * look clearly different, including for red-green colour-blind users (checked with CIEDE2000 colour
+ * differences), with white text at a contrast of at least 3:1 (block text is bold). Events, Sprites and Paths
+ * keep Sprite Lab's orange, blue and violet; on the Paths tab, actions are orange and sensing teal.
+ */
 export const COLORS = {
-  event: '#d9a12c',
-  sprite: '#3f8fd6',
-  path: '#8a5cd1',
-  game: '#2fa37f',
-  logic: '#5b80a5',
-  loops: '#5ba55b',
-  math: '#5b67a5',
-  text: '#5ba58c',
-  lists: '#745ba5',
-  variables: '#a55b80',
-  functions: '#995ba5',
+  event: '#d45d00',
+  sprite: '#1f7ae0',
+  path: '#8125ad',
+  pathDef: '#8125ad',
+  pathAction: '#d45d00',
+  pathSensing: '#00897b',
+  game: '#027a3b',
+  logic: '#0098c4',
+  loops: '#518e1e',
+  math: '#4955e1',
+  text: '#00897b',
+  lists: '#895b00',
+  variables: '#d32555',
+  functions: '#d62aa5',
 };
+
+/** Block style and toolbox category style for each colour, including Blockly's built-in blocks. */
+const STYLES: Record<string, string> = {
+  event: 'event',
+  sprite: 'sprite',
+  path: 'path',
+  pathDef: 'path_def',
+  pathAction: 'path_action',
+  pathSensing: 'path_sensing',
+  game: 'game',
+  logic: 'logic',
+  loops: 'loop',
+  math: 'math',
+  text: 'text',
+  lists: 'list',
+  variables: 'variable',
+  functions: 'procedure',
+};
+
+const blockStyles: Record<string, Partial<Blockly.Theme.BlockStyle>> = {};
+const categoryStyles: Record<string, Blockly.Theme.CategoryStyle> = {};
+for (const [key, style] of Object.entries(STYLES)) {
+  const colour = COLORS[key as keyof typeof COLORS];
+  blockStyles[`${style}_blocks`] = { colourPrimary: colour };
+  categoryStyles[`${style}_category`] = { colour };
+}
+// Dynamic variables share the variable colour.
+blockStyles.variable_dynamic_blocks = { colourPrimary: COLORS.variables };
 
 export const theme = Blockly.Theme.defineTheme('spriteblocks', {
   name: 'spriteblocks',
   base: Blockly.Themes.Classic,
   startHats: true,
-  blockStyles: {
-    event_blocks: { colourPrimary: COLORS.event },
-    sprite_blocks: { colourPrimary: COLORS.sprite },
-    path_blocks: { colourPrimary: COLORS.path },
-    path_def_blocks: { colourPrimary: '#6b3fb5' },
-    game_blocks: { colourPrimary: COLORS.game },
-  },
-  categoryStyles: {
-    event_category: { colour: COLORS.event },
-    sprite_category: { colour: COLORS.sprite },
-    path_category: { colour: COLORS.path },
-    game_category: { colour: COLORS.game },
-  },
+  blockStyles,
+  categoryStyles,
   componentStyles: {
     workspaceBackgroundColour: '#f6f7fb',
     toolboxBackgroundColour: '#ffffff',
     flyoutBackgroundColour: '#e9ecf4',
     flyoutOpacity: 1,
   },
-  fontStyle: { family: 'system-ui, -apple-system, Segoe UI, sans-serif', size: 11 },
+  fontStyle: { family: 'system-ui, -apple-system, Segoe UI, sans-serif', size: 11, weight: 'bold' },
 });
+
 
 const gridShadow = (loc = '0,0') => ({ shadow: { type: 'sb_location', fields: { LOC: loc } } });
 const locationOf = (sprite: object) => ({ ...gridShadow(), block: { type: 'sb_location_of', inputs: { SPRITE: sprite } } });
@@ -135,27 +162,37 @@ function pathsCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
 }
 
 /** Game blocks; sound blocks default to the project's first sound. */
+/** Variables: the game's own values (score and health) first, then Blockly's usual variable blocks. */
+function variablesCategory(ws: Blockly.WorkspaceSvg): Blockly.utils.toolbox.FlyoutItemInfoArray {
+  return [
+    { kind: 'label', text: 'Game values' },
+    { kind: 'block', type: 'sb_score' },
+    { kind: 'block', type: 'sb_change_score', inputs: { N: numberShadow(1) } },
+    { kind: 'block', type: 'sb_set_score', inputs: { N: numberShadow(0) } },
+    { kind: 'block', type: 'sb_health' },
+    { kind: 'block', type: 'sb_change_health', inputs: { N: numberShadow(-1) } },
+    { kind: 'block', type: 'sb_set_health', inputs: { N: numberShadow(3) } },
+    { kind: 'label', text: 'Your variables' },
+    ...Blockly.Variables.flyoutCategory(ws),
+  ];
+}
+
+/** Game blocks, most common and easiest first; sound blocks default to the project's first sound. */
 function gameCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
   const sound = state.soundIds[0] ?? '';
   return [
-    { kind: 'block', type: 'sb_change_score', inputs: { N: numberShadow(1) } },
-    { kind: 'block', type: 'sb_set_score', inputs: { N: numberShadow(0) } },
-    { kind: 'block', type: 'sb_score' },
-    { kind: 'block', type: 'sb_change_health', inputs: { N: numberShadow(-1) } },
-    { kind: 'block', type: 'sb_set_health', inputs: { N: numberShadow(3) } },
-    { kind: 'block', type: 'sb_health' },
     { kind: 'block', type: 'sb_play_sound', fields: { SOUND: sound } },
-    { kind: 'block', type: 'sb_builtin_sound', fields: { WHICH: 'win', SOUND: sound } },
     { kind: 'block', type: 'sb_message', inputs: { TEXT: textShadow('Hello!') } },
     { kind: 'block', type: 'sb_next_level' },
-    { kind: 'block', type: 'sb_goto_level', inputs: { N: numberShadow(1) } },
-    { kind: 'block', type: 'sb_restart_level' },
-    { kind: 'block', type: 'sb_level_number' },
     { kind: 'block', type: 'sb_win' },
     { kind: 'block', type: 'sb_lose' },
-    { kind: 'block', type: 'sb_set_background', fields: { BG: state.level?.background ?? 'bg_sky' } },
+    { kind: 'block', type: 'sb_restart_level' },
+    { kind: 'block', type: 'sb_goto_level', inputs: { N: numberShadow(1) } },
+    { kind: 'block', type: 'sb_level_number' },
     { kind: 'block', type: 'sb_player_speed', inputs: { N: numberShadow(5) } },
     { kind: 'block', type: 'sb_jump_height', inputs: { N: numberShadow(4) } },
+    { kind: 'block', type: 'sb_set_background', fields: { BG: state.level?.background ?? 'bg_sky' } },
+    { kind: 'block', type: 'sb_builtin_sound', fields: { WHICH: 'win', SOUND: sound } },
   ];
 }
 
@@ -163,6 +200,7 @@ export function registerToolboxCallbacks(ws: Blockly.WorkspaceSvg): void {
   ws.registerToolboxCategoryCallback('SPRITES', () => spriteCategory());
   ws.registerToolboxCategoryCallback('PATHS', () => pathsCategory());
   ws.registerToolboxCategoryCallback('GAME', () => gameCategory());
+  ws.registerToolboxCategoryCallback('GAME_VARIABLES', (w) => variablesCategory(w));
 }
 
 export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
@@ -192,7 +230,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
     {
       kind: 'category',
       name: 'Logic',
-      colour: COLORS.logic,
+      categorystyle: 'logic_category',
       contents: [
         { kind: 'block', type: 'controls_if' },
         { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
@@ -205,7 +243,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
     {
       kind: 'category',
       name: 'Loops',
-      colour: COLORS.loops,
+      categorystyle: 'loop_category',
       contents: [
         { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: numberShadow(3) } },
         {
@@ -225,7 +263,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
     {
       kind: 'category',
       name: 'Math',
-      colour: COLORS.math,
+      categorystyle: 'math_category',
       contents: [
         { kind: 'block', type: 'math_number' },
         { kind: 'block', type: 'math_arithmetic', inputs: { A: numberShadow(1), B: numberShadow(1) } },
@@ -238,7 +276,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
     {
       kind: 'category',
       name: 'Text',
-      colour: COLORS.text,
+      categorystyle: 'text_category',
       contents: [
         { kind: 'block', type: 'text' },
         { kind: 'block', type: 'text_join' },
@@ -248,7 +286,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
     {
       kind: 'category',
       name: 'Lists',
-      colour: COLORS.lists,
+      categorystyle: 'list_category',
       contents: [
         { kind: 'block', type: 'lists_create_with' },
         { kind: 'block', type: 'lists_length' },
@@ -256,43 +294,106 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
         { kind: 'block', type: 'lists_isEmpty' },
       ],
     },
-    { kind: 'category', name: 'Variables', colour: COLORS.variables, custom: 'VARIABLE' },
-    { kind: 'category', name: 'Functions', colour: COLORS.functions, custom: 'PROCEDURE' },
+    { kind: 'category', name: 'Variables', categorystyle: 'variable_category', custom: 'GAME_VARIABLES' },
+    { kind: 'category', name: 'Functions', categorystyle: 'procedure_category', custom: 'PROCEDURE' },
   ],
 };
 
-/** Flyout for the paths workspace; the throw block defaults to a project item and a path. */
+/** Categorized toolbox for the paths workspace; the throw block defaults to a project item and a path. */
 export function pathToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
   const names = pathNames();
   const throwPath = names.includes('fly forward') ? 'fly forward' : (names[0] ?? '');
   return {
-    kind: 'flyoutToolbox',
+    kind: 'categoryToolbox',
     contents: [
-      { kind: 'block', type: 'sb_path_def', fields: { NAME: 'new path' } },
-      { kind: 'block', type: 'sb_path_move', inputs: { N: numberShadow(1) } },
-      { kind: 'block', type: 'sb_path_move_toward', inputs: { N: numberShadow(1) } },
-      { kind: 'block', type: 'sb_path_jump', inputs: { N: numberShadow(2) } },
-      { kind: 'block', type: 'sb_path_wait', inputs: { N: numberShadow(1) } },
-      { kind: 'block', type: 'sb_path_face' },
-      { kind: 'block', type: 'sb_path_speed' },
       {
-        kind: 'block',
-        type: 'sb_path_throw',
-        fields: { ASSET: defaultAsset('item'), PATH: throwPath },
+        kind: 'category',
+        name: 'Paths',
+        categorystyle: 'path_def_category',
+        contents: [{ kind: 'block', type: 'sb_path_def', fields: { NAME: 'new path' } }],
       },
-      { kind: 'block', type: 'sb_path_disappear' },
-      { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: numberShadow(3) } },
-      { kind: 'block', type: 'controls_whileUntil' },
-      { kind: 'block', type: 'controls_if' },
-      { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
-      { kind: 'block', type: 'sb_path_can_move' },
-      { kind: 'block', type: 'sb_path_player_is' },
-      { kind: 'block', type: 'sb_path_on_ground' },
-      { kind: 'block', type: 'logic_negate' },
-      { kind: 'block', type: 'logic_operation' },
-      { kind: 'block', type: 'logic_compare' },
-      { kind: 'block', type: 'math_random_int', inputs: { FROM: numberShadow(1), TO: numberShadow(3) } },
-      { kind: 'block', type: 'math_number' },
+      {
+        kind: 'category',
+        name: 'Actions',
+        categorystyle: 'path_action_category',
+        contents: [
+          { kind: 'block', type: 'sb_path_move', inputs: { N: numberShadow(1) } },
+          { kind: 'block', type: 'sb_path_move', fields: { DIR: 'forward' }, inputs: { N: numberShadow(3) } },
+          { kind: 'block', type: 'sb_path_move_toward', inputs: { N: numberShadow(1) } },
+          { kind: 'block', type: 'sb_path_jump', inputs: { N: numberShadow(2) } },
+          { kind: 'block', type: 'sb_path_wait', inputs: { N: numberShadow(1) } },
+          { kind: 'block', type: 'sb_path_face' },
+          { kind: 'block', type: 'sb_path_speed' },
+          { kind: 'block', type: 'sb_path_throw', fields: { ASSET: defaultAsset('item'), PATH: throwPath } },
+          { kind: 'block', type: 'sb_path_disappear' },
+        ],
+      },
+      {
+        kind: 'category',
+        name: 'Sensing',
+        categorystyle: 'path_sensing_category',
+        contents: [
+          { kind: 'block', type: 'sb_path_can_move' },
+          { kind: 'block', type: 'sb_path_player_is' },
+          { kind: 'block', type: 'sb_path_player_distance' },
+          { kind: 'block', type: 'sb_path_on_ground' },
+          { kind: 'block', type: 'sb_path_position' },
+          { kind: 'block', type: 'sb_path_player_position' },
+        ],
+      },
+      { kind: 'sep' },
+      {
+        kind: 'category',
+        name: 'Loops',
+        categorystyle: 'loop_category',
+        contents: [
+          { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: numberShadow(3) } },
+          { kind: 'block', type: 'controls_whileUntil' },
+          {
+            kind: 'block',
+            type: 'controls_for',
+            inputs: { FROM: numberShadow(1), TO: numberShadow(5), BY: numberShadow(1) },
+          },
+          { kind: 'block', type: 'controls_flow_statements' },
+        ],
+      },
+      {
+        kind: 'category',
+        name: 'Logic',
+        categorystyle: 'logic_category',
+        contents: [
+          { kind: 'block', type: 'controls_if' },
+          { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
+          { kind: 'block', type: 'logic_compare' },
+          { kind: 'block', type: 'logic_operation' },
+          { kind: 'block', type: 'logic_negate' },
+          { kind: 'block', type: 'logic_boolean' },
+          { kind: 'block', type: 'logic_ternary' },
+        ],
+      },
+      {
+        kind: 'category',
+        name: 'Math',
+        categorystyle: 'math_category',
+        contents: [
+          { kind: 'block', type: 'math_number' },
+          { kind: 'block', type: 'math_arithmetic', inputs: { A: numberShadow(1), B: numberShadow(1) } },
+          { kind: 'block', type: 'math_random_int', inputs: { FROM: numberShadow(1), TO: numberShadow(3) } },
+          { kind: 'block', type: 'math_random_float' },
+          { kind: 'block', type: 'math_modulo', inputs: { DIVIDEND: numberShadow(10), DIVISOR: numberShadow(3) } },
+          { kind: 'block', type: 'math_round', inputs: { NUM: numberShadow(3.1) } },
+          { kind: 'block', type: 'math_single', inputs: { NUM: numberShadow(9) } },
+          { kind: 'block', type: 'math_number_property', inputs: { NUMBER_TO_CHECK: numberShadow(0) } },
+          {
+            kind: 'block',
+            type: 'math_constrain',
+            inputs: { VALUE: numberShadow(50), LOW: numberShadow(1), HIGH: numberShadow(100) },
+          },
+        ],
+      },
+      { kind: 'sep' },
+      { kind: 'category', name: 'Variables', categorystyle: 'variable_category', custom: 'VARIABLE' },
+      { kind: 'category', name: 'Functions', categorystyle: 'procedure_category', custom: 'PROCEDURE' },
     ],
   };
 }

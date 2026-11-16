@@ -52,11 +52,13 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 * **Rules** (main workspace) blocks are standard Blockly JSON definitions. Event blocks register handlers, and every
   action finishes within one frame. Blocks that are not inside an event are disabled. Locations are blocks too:
   a grid location (the default shadow), the location of a sprite, or a number of spaces from a sprite.
-* **Paths** live on their own tab with a flyout toolbox. Each path definition compiles to a JavaScript generator
+* **Paths** live on their own tab with a categorized toolbox (Paths, Actions, Sensing, Loops, Logic, Math, Variables, Functions). Each path definition compiles to a JavaScript generator
   function that the engine steps once per frame. `move left 3 spaces` moves one grid space at a time. It stops early
   at obstacles and, if the path says "stay on", at platform edges. `move forward` follows the way the sprite faces.
   `throw` creates a sprite in front of the thrower with a path of its own (projectiles); `disappear` removes the
-  sprite. "set path" blocks start a path without blocking the code that called them.
+  sprite. "set path" blocks start a path without blocking the code that called them. Functions defined on the
+  Paths tab also become generator functions, so a function full of moves animates like a path, and variables are
+  declared inside each path and function, so every sprite running a path keeps its own.
 * **Sprite classes** set the default behaviour:
   * character: falls in platformer levels (unless it flies) and turns to face its movement. In top-down levels the
     player fills its space and stays centred on the grid lines it isn't moving along, steering toward an open
@@ -84,6 +86,8 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 * **Sounds:** only sounds added to the project appear in sound blocks, and blocks using a removed sound show a
   warning. The game plays some sounds by itself (jump, falling out, running out of health, winning, game over);
   the "set sound for … to …" block changes or silences them.
+* **Block colours** are chosen so every category on the same workspace looks clearly different, including for
+  red-green colour-blind users, and stays dark enough for white text. They're defined in `src/blocks/toolbox.ts`.
 * **Warnings:** blocks warn about locations outside the level, missing sounds, sprites and paths, and
   platformer-only blocks (bounce, gravity, jumping) in games where every level is top-down.
 * **Health:** losing health makes the player flash and ignore damage for a moment. At 0 health the level
