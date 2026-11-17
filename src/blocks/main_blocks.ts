@@ -19,6 +19,14 @@ const KEYS = [
   ...'abcdefghijklmnopqrstuvwxyz0123456789'.split('').map((c) => [c.toUpperCase(), c]),
 ];
 
+/** Path speeds, shared with the Paths tab's "set speed" block. */
+export const PATH_SPEEDS = [
+  ['normal', '2'],
+  ['slow', '1'],
+  ['fast', '4'],
+  ['very fast', '8'],
+];
+
 const sprite = (name = 'SPRITE') => ({ type: 'input_value', name, check: ['Sprite', 'Array'] });
 const location = (name = 'LOC') => ({ type: 'input_value', name, check: 'Location' });
 const selector = (name = 'SELECTOR', value = 'player') => ({ type: 'field_sprite_selector', name, value });
@@ -150,7 +158,16 @@ export const MAIN_BLOCKS = [
     previousStatement: null,
     nextStatement: null,
     style: 'sprite_blocks',
-    tooltip: 'Creates a sprite at a location. Nothing is created outside the level.',
+    tooltip:
+      'Creates a sprite at a location. Nothing is created outside the level, inside a wall, or on a space that ' +
+      'already has the same sprite.',
+  },
+  {
+    type: 'sb_new_sprite',
+    message0: 'the new sprite',
+    output: 'Sprite',
+    style: 'sprite_blocks',
+    tooltip: 'The sprite (or sprites) made by the last “create” or “throw” block, for example to give it a path.',
   },
   {
     type: 'sb_move_to_location',
@@ -192,13 +209,15 @@ export const MAIN_BLOCKS = [
   },
   {
     type: 'sb_set_costume',
-    message0: 'change %1 costume to %2',
+    message0: 'turn %1 into %2',
     args0: [sprite(), { type: 'field_sprite_asset', name: 'ASSET' }],
     inputsInline: true,
     previousStatement: null,
     nextStatement: null,
     style: 'sprite_blocks',
-    tooltip: 'Changes how a sprite looks. Its class (character, item…) changes to match the new costume.',
+    tooltip:
+      'The sprite becomes the other sprite: it looks like it, behaves like its class (character, item…), and ' +
+      'rules about that sprite now apply to it. For example, turn a closed chest into an open chest.',
   },
   {
     type: 'sb_bounce',
@@ -219,7 +238,7 @@ export const MAIN_BLOCKS = [
   {
     type: 'sb_face',
     message0: 'make %1 face %2',
-    args0: [sprite(), { type: 'field_dropdown', name: 'DIR', options: DIRECTIONS }],
+    args0: [sprite(), { type: 'field_dropdown', name: 'DIR', options: [...DIRECTIONS, ['the player', 'player']] }],
     inputsInline: true,
     previousStatement: null,
     nextStatement: null,
@@ -340,12 +359,12 @@ export const MAIN_BLOCKS = [
   {
     type: 'sb_set_speed',
     message0: 'set %1 path speed to %2',
-    args0: [sprite(), number('SPEED')],
+    args0: [sprite(), { type: 'field_dropdown', name: 'SPEED', options: PATH_SPEEDS }],
     inputsInline: true,
     previousStatement: null,
     nextStatement: null,
     style: 'path_blocks',
-    tooltip: 'Path movement speed: 1 is slow, 2 is normal, 4 is fast.',
+    tooltip: 'How fast a path moves the sprite, like the “set speed” block on the Paths tab.',
   },
 
   // ---------------------------------------------------------------- Game
@@ -559,7 +578,8 @@ const generators: Record<string, (b: Blockly.Block, g: Gen) => string | [string,
 
   sb_set_path: (b, g) => `$g.setPath(${val(b, g, 'SPRITE')}, ${q(b.getFieldValue('PATH'))});\n`,
   sb_stop_path: (b, g) => `$g.stopPath(${val(b, g, 'SPRITE')});\n`,
-  sb_set_speed: (b, g) => `$g.setSpeed(${val(b, g, 'SPRITE')}, ${num(b, g, 'SPEED')});\n`,
+  sb_set_speed: (b, g) => `$g.setSpeed(${val(b, g, 'SPRITE')}, ${Number(b.getFieldValue('SPEED')) || 2});\n`,
+  sb_new_sprite: () => ['$g.newSprite()', Order.FUNCTION_CALL],
 
   sb_change_score: (b, g) => `$g.changeScore(${num(b, g, 'N')});\n`,
   sb_set_score: (b, g) => `$g.setScore(${num(b, g, 'N')});\n`,

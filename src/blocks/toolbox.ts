@@ -10,28 +10,22 @@ const player = { block: { type: 'sb_player' } };
 const thisSprite = { block: { type: 'sb_this_sprite' } };
 const otherSprite = { block: { type: 'sb_other_sprite' } };
 
-/**
- * Block colours: bright hues spread around the colour wheel, each about as light and saturated as white text
- * allows (a contrast of at least 3:1; block text is bold). Every category on the same workspace is chosen to
- * look clearly different, including for red-green colour-blind users (checked with CIEDE2000 colour
- * differences). Sprites and Paths are the logo's orange and blue (index.html); on the Paths tab, actions share
- * the Events green and sensing shares the Text teal.
- */
+/** Block colours: Sprite Lab-style yellow events, blue sprites and violet paths, with Blockly's classic hues elsewhere. */
 export const COLORS = {
-  event: '#2fa354',
-  sprite: '#fe5401',
-  path: '#3895fd',
-  pathDef: '#3895fd',
-  pathAction: '#2fa354',
-  pathSensing: '#06a588',
-  game: '#b100ff',
-  logic: '#00a1b2',
-  loops: '#ff0aab',
-  math: '#8278c5',
-  text: '#06a588',
-  lists: '#946000',
-  variables: '#ff5081',
-  functions: '#639700',
+  event: '#d9a12c',
+  sprite: '#3f8fd6',
+  path: '#8a5cd1',
+  pathDef: '#6b3fb5',
+  pathAction: '#8a5cd1',
+  pathSensing: '#8a5cd1',
+  game: '#2fa37f',
+  logic: '#5b80a5',
+  loops: '#5ba55b',
+  math: '#5b67a5',
+  text: '#5ba58c',
+  lists: '#745ba5',
+  variables: '#a55b80',
+  functions: '#995ba5',
 };
 
 /** Block style and toolbox category style for each colour, including Blockly's built-in blocks. */
@@ -103,6 +97,7 @@ function spriteCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
         },
       },
     },
+    { kind: 'block', type: 'sb_new_sprite' },
     { kind: 'block', type: 'sb_remove', inputs: { SPRITE: otherSprite } },
     {
       kind: 'block',
@@ -122,7 +117,7 @@ function spriteCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
     { kind: 'label', text: 'Change' },
     { kind: 'block', type: 'sb_player_speed', inputs: { N: numberShadow(5) } },
     { kind: 'block', type: 'sb_jump_height', inputs: { N: numberShadow(4) } },
-    { kind: 'block', type: 'sb_set_costume', fields: { ASSET: any }, inputs: { SPRITE: thisSprite } },
+    { kind: 'block', type: 'sb_set_costume', fields: { ASSET: any }, inputs: { SPRITE: otherSprite } },
     { kind: 'block', type: 'sb_move_to_location', inputs: { SPRITE: player, LOC: gridShadow() } },
     { kind: 'block', type: 'sb_bounce', inputs: { SPRITE: player } },
     { kind: 'block', type: 'sb_face', inputs: { SPRITE: otherSprite } },
@@ -140,7 +135,6 @@ function spriteCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
     { kind: 'block', type: 'sb_is_above', inputs: { A: thisSprite, B: otherSprite } },
     { kind: 'block', type: 'sb_is_touching', inputs: { SPRITE: player } },
     { kind: 'block', type: 'sb_on_ground', inputs: { SPRITE: player } },
-    { kind: 'block', type: 'sb_exists', inputs: { SPRITE: { block: { type: 'sb_random_sprite' } } } },
   ];
 }
 
@@ -159,7 +153,7 @@ function pathsCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
   }
   items.push(
     { kind: 'block', type: 'sb_stop_path', inputs: { SPRITE: otherSprite } },
-    { kind: 'block', type: 'sb_set_speed', inputs: { SPRITE: otherSprite, SPEED: numberShadow(4) } },
+    { kind: 'block', type: 'sb_set_speed', fields: { SPEED: '4' }, inputs: { SPRITE: otherSprite } },
   );
   return items;
 }
@@ -285,7 +279,6 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
       contents: [
         { kind: 'block', type: 'text' },
         { kind: 'block', type: 'text_join' },
-        { kind: 'block', type: 'text_length', inputs: { VALUE: textShadow('abc') } },
       ],
     },
     {

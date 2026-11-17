@@ -145,12 +145,46 @@ export function refreshWarnings(): void {
   }
 }
 
+/** A serialized block, as far as upgrading old saves needs. */
+interface SavedBlock {
+  type?: string;
+  fields?: Record<string, unknown>;
+  inputs?: Record<string, { block?: SavedBlock; shadow?: SavedBlock }>;
+  next?: { block?: SavedBlock };
+}
+
+/**
+ * Upgrades blocks saved by older versions: "set … path speed" used to take a number and now picks a speed
+ * (the nearest of slow, normal, fast and very fast).
+ */
+function upgradeBlock(b: SavedBlock | undefined): void {
+  if (!b) return;
+  if (b.type === 'sb_set_speed' && b.inputs?.SPEED) {
+    const value = b.inputs.SPEED.block ?? b.inputs.SPEED.shadow;
+    const n = Number(value?.type === 'math_number' ? value.fields?.NUM : 2) || 2;
+    const nearest = [1, 2, 4, 8].reduce((best, s) => (Math.abs(Math.log2(s / n)) < Math.abs(Math.log2(best / n)) ? s : best));
+    b.fields = { ...b.fields, SPEED: String(nearest) };
+    delete b.inputs.SPEED;
+  }
+  for (const input of Object.values(b.inputs ?? {})) {
+    upgradeBlock(input.block);
+    upgradeBlock(input.shadow);
+  }
+  upgradeBlock(b.next?.block);
+}
+
+function upgradeWorkspace<T>(saved: T): T {
+  const blocks = (saved as { blocks?: { blocks?: SavedBlock[] } })?.blocks?.blocks;
+  blocks?.forEach(upgradeBlock);
+  return saved;
+}
+
 export function loadWorkspaces(project: Project): void {
   loading = true;
   try {
     // Paths first: path dropdowns on the main workspace list names from the paths workspace.
     Blockly.serialization.workspaces.load(project.paths ?? {}, paths);
-    Blockly.serialization.workspaces.load(project.main ?? {}, main);
+    Blockly.serialization.workspaces.load(upgradeWorkspace(project.main ?? {}), main);
   } finally {
     loading = false;
   }

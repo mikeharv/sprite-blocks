@@ -58,7 +58,9 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   `throw` creates a sprite in front of the thrower with a path of its own (projectiles); `disappear` removes the
   sprite. "set path" blocks start a path without blocking the code that called them. Functions defined on the
   Paths tab also become generator functions, so a function full of moves animates like a path, and variables are
-  declared inside each path and function, so every sprite running a path keeps its own.
+  declared inside each path and function, so every sprite running a path keeps its own. A repeating path loops
+  inside one function, so its variables keep their values from one pass to the next. "face the player" and
+  "can move forward" save working out directions by hand.
 * **Sprite classes** set the default behaviour:
   * character: falls in platformer levels (unless it flies) and turns to face its movement. In top-down levels the
     player fills its space and stays centred on the grid lines it isn't moving along, steering toward an open
@@ -69,6 +71,13 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   * platform: one-way ground that can be jumped through from below.
   * obstacle: solid on every side. Standing on or pushing against a solid sprite counts as touching it.
   * item: no built-in behaviour. Each item is drawn either behind platforms (trees, doors) or in front of them.
+* **Ladders and vines** are climbable in platformer levels: while the player is on one, gravity lets go and the
+  up and down keys climb. Climbing up stops at the top, where the player can stand and step off.
+* **Creating sprites:** "create" skips spaces inside walls and spaces that already hold the same sprite. "the new
+  sprite" is whatever the last "create" or "throw" block made, for example to give it a path. "turn … into …"
+  swaps a sprite for another one (a closed chest into an open chest); rules about the new sprite then apply.
+* **Messages** stay up for at least a second; a newer message waits its turn instead of replacing one you
+  haven't had time to read. "You win!" and "Game over" replace everything.
 * **Jumping by rule:** "make … bounce" works anywhere, for springs and stomps; put it inside "if … is on the
   ground" to jump only from the ground, like the player. "set jump height" changes the player's own jump.
 * **Costumes:** a sprite with several costumes either animates while it moves (walkers) or all the time (coins,
@@ -89,9 +98,8 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 * **Sounds:** only sounds added to the project appear in sound blocks, and blocks using a removed sound show a
   warning. The game plays some sounds by itself (jump, falling out, running out of health, winning, game over);
   the "set sound for … to …" block changes or silences them.
-* **Block colours** are chosen so every category on the same workspace looks clearly different, including for
-  red-green colour-blind users, and stays as bright as white text allows. Sprites and Paths are the logo's
-  orange and blue. They're defined in `src/blocks/toolbox.ts`.
+* **Block colours** follow Sprite Lab: yellow events, blue sprites, violet paths. They're defined in
+  `src/blocks/toolbox.ts`.
 * **Warnings:** blocks warn about locations outside the level, missing sounds, sprites and paths, and
   platformer-only blocks (bounce, gravity, jumping) in games where every level is top-down.
 * **Health:** losing health makes the player flash and ignore damage for a moment. At 0 health the level

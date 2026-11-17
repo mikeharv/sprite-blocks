@@ -100,7 +100,7 @@ export const PATH_BLOCKS = [
   {
     type: 'sb_path_face',
     message0: 'face %1',
-    args0: [{ type: 'field_dropdown', name: 'DIR', options: DIRECTIONS }],
+    args0: [{ type: 'field_dropdown', name: 'DIR', options: [...DIRECTIONS, ['the player', 'player']] }],
     previousStatement: null,
     nextStatement: null,
     style: 'path_action_blocks',
@@ -122,10 +122,10 @@ export const PATH_BLOCKS = [
   {
     type: 'sb_path_can_move',
     message0: 'can move %1',
-    args0: [{ type: 'field_dropdown', name: 'DIR', options: DIRECTIONS }],
+    args0: [{ type: 'field_dropdown', name: 'DIR', options: [...DIRECTIONS, ['forward', 'forward']] }],
     output: 'Boolean',
     style: 'path_sensing_blocks',
-    tooltip: 'True if the next space that way is free (and not past a platform edge).',
+    tooltip: 'True if the next space that way (forward: the way I face) is free, and not past a platform edge.',
   },
   {
     type: 'sb_path_player_is',
@@ -233,12 +233,14 @@ const procedureCall = (b: Blockly.Block, g: PathGenerator) => {
 const generators: Record<string, (b: Blockly.Block, g: PathGenerator) => string | [string, Order] | null> = {
   sb_path_def: (b, g) => {
     const steps = g.statementToCode(b, 'STEPS');
+    const repeat = b.getFieldValue('LOOP') === 'repeat';
     return (
       `$paths[${JSON.stringify(String(b.getFieldValue('NAME')))}] = {\n` +
-      `  loop: ${b.getFieldValue('LOOP') === 'repeat'},\n` +
+      `  loop: ${repeat},\n` +
       `  ignoreGravity: ${b.getFieldValue('GRAVITY') === 'ignore'},\n` +
       `  edges: ${JSON.stringify(b.getFieldValue('EDGES'))},\n` +
-      `  fn: function* ($p) {\n${g.prefixLines(g.localVariables(b) + steps, g.INDENT)}  },\n};\n`
+      // A repeating path loops inside one generator, so its variables keep their values from pass to pass.
+      `  fn: function* ($p) {\n${g.prefixLines(g.localVariables(b) + (repeat ? `while (true) {\n${steps}yield* $p.loopEnd();\n}\n` : steps), g.INDENT)}  },\n};\n`
     );
   },
   sb_path_move: (b, g) => `yield* $p.move(${dir(b)}, ${n(b, g)});\n`,

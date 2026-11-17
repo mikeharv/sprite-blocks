@@ -73,7 +73,7 @@ body {
 }
 .brand { font-weight: 800; font-size: 17px; display: flex; align-items: center; gap: 8px; }
 .logo {
-  /* The same mark as the favicon (index.html): Sprites orange and Paths blue, split evenly corner to corner. */
+  /* The same mark as the favicon (index.html): yellow and blue, split evenly corner to corner. */
   width: 22px; height: 22px; flex: none;
 }
 .project-name input {

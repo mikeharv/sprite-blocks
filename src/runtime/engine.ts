@@ -17,6 +17,10 @@ const MAX_FALL = 11;
 const INVINCIBLE_FRAMES = 90;
 const START_HEALTH = 3;
 const LOOP_BUDGET = 200000;
+/** A message stays at least this long (frames) before a newer one replaces it. */
+const MESSAGE_MIN_FRAMES = 60;
+/** Sprites a platformer player can climb. */
+const CLIMBABLE = new Set(['ladder', 'plant']);
 
 export type Dir = 'left' | 'right' | 'up' | 'down';
 const DIRS: Record<Dir, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
@@ -77,6 +81,8 @@ export class Sprite {
   onGround = false;
   blockedX = false;
   blockedY = false;
+  /** A platformer player on a ladder or vine: no gravity, and up and down climb. */
+  climbing = false;
   /** Last horizontal direction faced; decides mirroring even while moving up or down. */
   lookH: 'left' | 'right';
   private facingDir: Dir;
@@ -192,6 +198,7 @@ export class PathRun {
 export class PathContext {
   budget = 5000;
   frameMoves = 0;
+  framePasses = 0;
 
   constructor(
     readonly sprite: Sprite,
@@ -212,8 +219,10 @@ export class PathContext {
     return false;
   }
 
-  canMove(dir: Dir): boolean {
+  /** Whether the next space that way is free. `dir` may be 'forward': the way the sprite is facing. */
+  canMove(direction: Dir | 'forward'): boolean {
     const s = this.sprite;
+    const dir = direction === 'forward' ? s.facing : direction;
     const [dx, dy] = DIRS[dir] ?? [0, 0];
     if (this.gravityOn && dy !== 0) return false;
     const tx = s.col + dx;
@@ -230,8 +239,19 @@ export class PathContext {
     return this.sprite.onGround;
   }
 
-  face(dir: Dir): void {
-    if (DIRS[dir]) this.sprite.facing = dir;
+  /** Faces a direction, or 'player': toward the player (left or right while gravity is on). */
+  face(dir: Dir | 'player'): void {
+    if (dir === 'player') {
+      if (this.game.api.player()) this.sprite.facing = this.playerDirection();
+    } else if (DIRS[dir]) this.sprite.facing = dir;
+  }
+
+  /**
+   * End of one pass of a repeating path. Waits a frame unless the pass moved this frame, and never runs two
+   * passes in one frame, so a path that doesn't move can't spin.
+   */
+  *loopEnd(): Generator<unknown, void, unknown> {
+    if (this.framePasses++ > 0 || this.frameMoves === 0) yield;
   }
 
   setSpeed(speed: number): void {
@@ -439,6 +459,9 @@ export class Game {
   frame = 0;
   private message = '';
   private messageFrames = 0;
+  /** Frames the current message has been on screen, and messages waiting their turn. */
+  private messageShown = 0;
+  private messageQueue: { text: string; seconds: number }[] = [];
   private pendingLevel: number | null = null;
 
   // Program
@@ -529,7 +552,7 @@ export class Game {
     this.jumpHeight = 3;
     this.sounds = { ...DEFAULT_SOUNDS };
     this.finished = '';
-    this.message = '';
+    this.clearMessages();
     this.healthZeroFired = false;
     this.resetHandlers();
     try {
@@ -631,7 +654,8 @@ export class Game {
 
   private loadLevelData(level: Level, setupCode: string | null): void {
     this.sprites = [];
-    this.message = '';
+    // A running game keeps its messages across levels ("Lives left: 2" survives a restart).
+    if (!this.running) this.clearMessages();
     this.setupLevel(level);
     if (setupCode) {
       new Function('$g', setupCode)(this.api);
@@ -700,9 +724,39 @@ export class Game {
     if (id) playSound(id, volume);
   }
 
+  /**
+   * Shows a message. A message that has been on screen for less than a second isn't replaced straight away:
+   * the new one waits its turn (at most three wait; repeats are skipped). Lasting messages (win, game over)
+   * replace everything.
+   */
   showMessage(text: string, seconds = 2.5): void {
-    this.message = String(text);
+    text = String(text);
+    if (seconds <= 0) {
+      this.messageQueue = [];
+      this.setMessage(text, seconds);
+      return;
+    }
+    if (this.messageFrames === Infinity) return;
+    if (this.message && this.messageShown < MESSAGE_MIN_FRAMES) {
+      const last = this.messageQueue.at(-1)?.text ?? this.message;
+      if (last === text) return;
+      this.messageQueue.push({ text, seconds });
+      if (this.messageQueue.length > 3) this.messageQueue.shift();
+      return;
+    }
+    this.setMessage(text, seconds);
+  }
+
+  private setMessage(text: string, seconds: number): void {
+    this.message = text;
     this.messageFrames = seconds > 0 ? Math.round(seconds * 60) : Infinity;
+    this.messageShown = 0;
+  }
+
+  private clearMessages(): void {
+    this.message = '';
+    this.messageFrames = 0;
+    this.messageQueue = [];
   }
 
   // ---------------------------------------------------------------- sprites
@@ -811,7 +865,31 @@ export class Game {
   }
 
   gravityActive(s: Sprite): boolean {
-    return this.mode === 'platformer' && s.gravity && !(s.path && s.path.def.ignoreGravity);
+    return this.mode === 'platformer' && s.gravity && !s.climbing && !(s.path && s.path.def.ignoreGravity);
+  }
+
+  /** Whether a climbable sprite (ladder, vine) is in the given space. */
+  private climbableAt(x: number, y: number): boolean {
+    return this.sprites.some((o) => !o.removed && CLIMBABLE.has(o.asset.id) && o.col === x && o.row === y);
+  }
+
+  /**
+   * A platformer player is climbing while its middle or its feet are on a ladder or vine. Up and down climb;
+   * climbing up stops with the feet at the top of the ladder, so the player can stand there and step off.
+   */
+  private climb(s: Sprite, up: boolean, down: boolean): void {
+    const col = Math.floor(s.x / CELL);
+    const feet = s.y + s.h / 2;
+    const feetRow = Math.floor(feet / CELL);
+    s.climbing =
+      this.mode === 'platformer' && s.gravity && (this.climbableAt(col, Math.floor(s.y / CELL)) || this.climbableAt(col, feetRow));
+    if (!s.climbing) return;
+    let top = feetRow;
+    while (this.climbableAt(col, top - 1)) top--;
+    if (!this.climbableAt(col, top)) top++;
+    const v = (down ? 1 : 0) - (up ? 1 : 0);
+    s.vy = v * this.playerSpeed;
+    if (v < 0) s.vy = Math.max(s.vy, top * CELL - feet);
   }
 
   // ---------------------------------------------------------------- update
@@ -833,6 +911,7 @@ export class Game {
       s.ctrlX = s.ctrlY = 0;
       if (s.path && !s.removed) {
         s.path.ctx.frameMoves = 0;
+        s.path.ctx.framePasses = 0;
         try {
           s.path.step();
         } catch (e) {
@@ -880,8 +959,11 @@ export class Game {
     this.handleClicks();
 
     if (this.sprites.some((s) => s.removed)) this.sprites = this.sprites.filter((s) => !s.removed);
-    if (this.messageFrames > 0 && this.messageFrames !== Infinity) {
-      if (--this.messageFrames === 0) this.message = '';
+    if (this.message) this.messageShown++;
+    const next = this.messageShown >= MESSAGE_MIN_FRAMES ? this.messageQueue.shift() : undefined;
+    if (next) this.setMessage(next.text, next.seconds);
+    else if (this.messageFrames > 0 && this.messageFrames !== Infinity && --this.messageFrames === 0) {
+      this.message = this.messageQueue.length ? this.message : '';
     }
     if (this.pendingLevel !== null) {
       const index = this.pendingLevel;
@@ -902,11 +984,14 @@ export class Game {
       // A path moves the player instead of the keyboard: drop any speed the keyboard gave it.
       if (s.path) {
         s.vx = 0;
+        s.climbing = false;
         continue;
       }
       s.vx = (right ? 1 : 0) - (left ? 1 : 0);
       if (s.vx !== 0) s.facing = s.vx < 0 ? 'left' : 'right';
       s.vx *= this.playerSpeed;
+      this.climb(s, up, down);
+      if (s.climbing) continue;
       if (this.gravityActive(s)) {
         if (jump && s.onGround) {
           s.vy = -jumpVelocity(this.jumpHeight);
@@ -1373,15 +1458,30 @@ export class GameApi {
   spawn(assetId: string, x: number, y: number): Sprite | null {
     return this.g.spawn(assetId, x, y);
   }
+  /** Sprites made by the last "create" or "throw" block ("the new sprite"). */
+  private created: Sprite[] = [];
+  /**
+   * Creates a sprite in each space, skipping a space that is a wall (an obstacle) or already holds the same
+   * sprite, so rules can't bury sprites in walls or stack copies.
+   */
   create(assetId: string, at: LocRef): Sprite[] {
-    return this.locs(at)
-      .map((l) => this.g.spawn(assetId, l.x, l.y))
-      .filter((s): s is Sprite => !!s);
+    const made: Sprite[] = [];
+    for (const l of this.locs(at)) {
+      if (this.g.solidAt(l.x, l.y, false)) continue;
+      if (this.g.sprites.some((o) => !o.removed && o.asset.id === assetId && o.col === l.x && o.row === l.y)) continue;
+      const s = this.g.spawn(assetId, l.x, l.y);
+      if (s) made.push(s);
+    }
+    return (this.created = made);
   }
   throwFrom(ref: SpriteRef, assetId: string, path: string): Sprite[] {
-    return this.refs(ref)
+    this.created = this.refs(ref)
       .map((s) => this.g.throwFrom(s, assetId, path))
       .filter((s): s is Sprite => !!s);
+    return this.created;
+  }
+  newSprite(): Sprite[] {
+    return this.created.filter((s) => !s.removed);
   }
   remove(ref: SpriteRef): void {
     this.refs(ref).forEach((s) => this.g.remove(s));
@@ -1438,8 +1538,18 @@ export class GameApi {
       s.onGround = false;
     });
   }
-  face(ref: SpriteRef, dir: Dir): void {
-    this.refs(ref).forEach((s) => (s.facing = dir));
+  /** Faces a direction, or 'player': toward the player (left or right in platformer levels). */
+  face(ref: SpriteRef, dir: Dir | 'player'): void {
+    const p = this.player();
+    for (const s of this.refs(ref)) {
+      if (dir !== 'player') s.facing = dir;
+      else if (p && p !== s) {
+        const dx = p.x - s.x;
+        const dy = p.y - s.y;
+        s.facing =
+          this.g.mode === 'platformer' || Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down';
+      }
+    }
   }
 
   // Sprite questions
