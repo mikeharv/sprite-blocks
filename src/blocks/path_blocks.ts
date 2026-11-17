@@ -67,12 +67,16 @@ export const PATH_BLOCKS = [
   },
   {
     type: 'sb_path_move_toward',
-    message0: 'move %1 spaces toward the player',
-    args0: [{ type: 'input_value', name: 'N', check: 'Number' }],
+    message0: 'move %1 spaces toward %2',
+    args0: [
+      { type: 'input_value', name: 'N', check: 'Number' },
+      { type: 'field_sprite_selector', name: 'TARGET', value: 'player' },
+    ],
     inputsInline: true,
     previousStatement: null,
     nextStatement: null,
     style: 'path_action_blocks',
+    tooltip: 'Moves one space at a time toward the nearest matching sprite, such as the player or an open door.',
   },
   {
     type: 'sb_path_jump',
@@ -238,7 +242,8 @@ const generators: Record<string, (b: Blockly.Block, g: PathGenerator) => string 
     );
   },
   sb_path_move: (b, g) => `yield* $p.move(${dir(b)}, ${n(b, g)});\n`,
-  sb_path_move_toward: (b, g) => `yield* $p.moveToward('player', ${n(b, g)});\n`,
+  sb_path_move_toward: (b, g) =>
+    `yield* $p.moveToward(${JSON.stringify(String(b.getFieldValue('TARGET') ?? 'player'))}, ${n(b, g)});\n`,
   sb_path_jump: (b, g) => `yield* $p.jump(${n(b, g)});\n`,
   sb_path_wait: (b, g) => `yield* $p.wait(${n(b, g)});\n`,
   sb_path_throw: (b) =>

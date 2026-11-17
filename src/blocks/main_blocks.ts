@@ -462,7 +462,7 @@ export const MAIN_BLOCKS = [
     args0: [number('N')],
     previousStatement: null,
     nextStatement: null,
-    style: 'game_blocks',
+    style: 'sprite_blocks',
     tooltip: 'Default is 3.5.',
   },
   {
@@ -471,7 +471,7 @@ export const MAIN_BLOCKS = [
     args0: [number('N')],
     previousStatement: null,
     nextStatement: null,
-    style: 'game_blocks',
+    style: 'sprite_blocks',
     tooltip: 'Default is 3.',
   },
 ];

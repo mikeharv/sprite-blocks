@@ -11,26 +11,27 @@ const thisSprite = { block: { type: 'sb_this_sprite' } };
 const otherSprite = { block: { type: 'sb_other_sprite' } };
 
 /**
- * Block colours: bright hues spread around the colour wheel. Every category on the same workspace is chosen to
+ * Block colours: bright hues spread around the colour wheel, each about as light and saturated as white text
+ * allows (a contrast of at least 3:1; block text is bold). Every category on the same workspace is chosen to
  * look clearly different, including for red-green colour-blind users (checked with CIEDE2000 colour
- * differences), with white text at a contrast of at least 3:1 (block text is bold). Events, Sprites and Paths
- * keep Sprite Lab's orange, blue and violet; on the Paths tab, actions are orange and sensing teal.
+ * differences). Sprites and Paths are the logo's orange and blue (index.html); on the Paths tab, actions share
+ * the Events green and sensing shares the Text teal.
  */
 export const COLORS = {
-  event: '#d45d00',
-  sprite: '#1f7ae0',
-  path: '#8125ad',
-  pathDef: '#8125ad',
-  pathAction: '#d45d00',
-  pathSensing: '#00897b',
-  game: '#027a3b',
-  logic: '#0098c4',
-  loops: '#518e1e',
-  math: '#4955e1',
-  text: '#00897b',
-  lists: '#895b00',
-  variables: '#d32555',
-  functions: '#d62aa5',
+  event: '#2fa354',
+  sprite: '#fe5401',
+  path: '#3895fd',
+  pathDef: '#3895fd',
+  pathAction: '#2fa354',
+  pathSensing: '#06a588',
+  game: '#b100ff',
+  logic: '#00a1b2',
+  loops: '#ff0aab',
+  math: '#8278c5',
+  text: '#06a588',
+  lists: '#946000',
+  variables: '#ff5081',
+  functions: '#639700',
 };
 
 /** Block style and toolbox category style for each colour, including Blockly's built-in blocks. */
@@ -119,6 +120,8 @@ function spriteCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
       inputs: { N: numberShadow(2), SPRITE: player },
     },
     { kind: 'label', text: 'Change' },
+    { kind: 'block', type: 'sb_player_speed', inputs: { N: numberShadow(5) } },
+    { kind: 'block', type: 'sb_jump_height', inputs: { N: numberShadow(4) } },
     { kind: 'block', type: 'sb_set_costume', fields: { ASSET: any }, inputs: { SPRITE: thisSprite } },
     { kind: 'block', type: 'sb_move_to_location', inputs: { SPRITE: player, LOC: gridShadow() } },
     { kind: 'block', type: 'sb_bounce', inputs: { SPRITE: player } },
@@ -166,14 +169,18 @@ function pathsCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
 function variablesCategory(ws: Blockly.WorkspaceSvg): Blockly.utils.toolbox.FlyoutItemInfoArray {
   return [
     { kind: 'label', text: 'Game values' },
+    // Set, change, then get, spaced like Blockly's own variable blocks below.
+    { kind: 'block', type: 'sb_set_score', gap: 8, inputs: { N: numberShadow(0) } },
+    { kind: 'block', type: 'sb_change_score', gap: 8, inputs: { N: numberShadow(1) } },
     { kind: 'block', type: 'sb_score' },
-    { kind: 'block', type: 'sb_change_score', inputs: { N: numberShadow(1) } },
-    { kind: 'block', type: 'sb_set_score', inputs: { N: numberShadow(0) } },
+    { kind: 'block', type: 'sb_set_health', gap: 8, inputs: { N: numberShadow(3) } },
+    { kind: 'block', type: 'sb_change_health', gap: 8, inputs: { N: numberShadow(-1) } },
     { kind: 'block', type: 'sb_health' },
-    { kind: 'block', type: 'sb_change_health', inputs: { N: numberShadow(-1) } },
-    { kind: 'block', type: 'sb_set_health', inputs: { N: numberShadow(3) } },
     { kind: 'label', text: 'Your variables' },
-    ...Blockly.Variables.flyoutCategory(ws),
+    // Blockly's own variable blocks, with a number to start the "set" block's value.
+    ...Blockly.Variables.flyoutCategory(ws).map((item) =>
+      'type' in item && item.type === 'variables_set' ? { ...item, inputs: { VALUE: numberShadow(0) } } : item,
+    ),
   ];
 }
 
@@ -189,8 +196,6 @@ function gameCategory(): Blockly.utils.toolbox.ToolboxItemInfo[] {
     { kind: 'block', type: 'sb_restart_level' },
     { kind: 'block', type: 'sb_goto_level', inputs: { N: numberShadow(1) } },
     { kind: 'block', type: 'sb_level_number' },
-    { kind: 'block', type: 'sb_player_speed', inputs: { N: numberShadow(5) } },
-    { kind: 'block', type: 'sb_jump_height', inputs: { N: numberShadow(4) } },
     { kind: 'block', type: 'sb_set_background', fields: { BG: state.level?.background ?? 'bg_sky' } },
     { kind: 'block', type: 'sb_builtin_sound', fields: { WHICH: 'win', SOUND: sound } },
   ];

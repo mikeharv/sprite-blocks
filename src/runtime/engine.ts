@@ -240,13 +240,32 @@ export class PathContext {
 
   /** Direction of the nearest player, preferring the axis with the larger distance. */
   playerDirection(): Dir {
+    return this.directionTo(this.game.api.player());
+  }
+
+  /** Direction of `target`, preferring the axis with the larger distance (left or right while falling). */
+  private directionTo(target: Sprite | null): Dir {
     const s = this.sprite;
-    const p = this.game.api.player();
-    if (!p) return s.facing;
-    const dx = p.x - s.x;
-    const dy = p.y - s.y;
+    if (!target) return s.facing;
+    const dx = target.x - s.x;
+    const dy = target.y - s.y;
     if (this.gravityOn || Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? 'left' : 'right';
     return dy < 0 ? 'up' : 'down';
+  }
+
+  /** The nearest other sprite matching a selector ("player", "class:…", "asset:…"). */
+  private nearest(selector: string): Sprite | null {
+    const s = this.sprite;
+    let best: Sprite | null = null;
+    let bestDist = Infinity;
+    for (const o of this.game.api.find(selector)) {
+      const d = (o.x - s.x) ** 2 + (o.y - s.y) ** 2;
+      if (o !== s && d < bestDist) {
+        best = o;
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   /** Moves `count` grid spaces. `dir` may be 'forward': the way the sprite is facing. */
@@ -264,8 +283,10 @@ export class PathContext {
         return;
       }
       this.frameMoves++;
-      const targetX = (s.col + dx) * CELL + CELL / 2;
-      const targetY = (s.row + dy) * CELL + CELL - s.h / 2;
+      // Move straight: only the axis of travel heads for the next space. A sprite that is off the grid on the
+      // other axis (say, a player given a path mid-jump) keeps that offset instead of sliding onto the grid.
+      const targetX = dx !== 0 ? (s.col + dx) * CELL + CELL / 2 : s.x;
+      const targetY = dy !== 0 ? (s.row + dy) * CELL + CELL - s.h / 2 : s.y;
       for (let guard = 0; guard < 600; guard++) {
         const rx = targetX - s.x;
         const ry = this.gravityOn ? 0 : targetY - s.y;
@@ -280,10 +301,17 @@ export class PathContext {
     }
   }
 
-  *moveToward(target: 'player', count: number): Generator<unknown, void, unknown> {
+  /** Moves `count` spaces one at a time, each toward the nearest sprite matching `selector`. */
+  *moveToward(selector: string, count: number): Generator<unknown, void, unknown> {
     const n = Math.max(0, Math.floor(Number(count) || 0));
     for (let i = 0; i < n; i++) {
-      if (target === 'player') yield* this.move(this.playerDirection(), 1);
+      const target = this.nearest(selector);
+      // Already there (or nothing to head for): stay put this step.
+      if (!target || (target.col === this.sprite.col && target.row === this.sprite.row)) {
+        yield;
+        continue;
+      }
+      yield* this.move(this.directionTo(target), 1);
     }
   }
 
@@ -870,7 +898,12 @@ export class Game {
     const down = k.has('down') || k.has('s');
     const jump = up || k.has('space');
     for (const s of this.sprites) {
-      if (!s.isPlayer || s.removed || s.path) continue;
+      if (!s.isPlayer || s.removed) continue;
+      // A path moves the player instead of the keyboard: drop any speed the keyboard gave it.
+      if (s.path) {
+        s.vx = 0;
+        continue;
+      }
       s.vx = (right ? 1 : 0) - (left ? 1 : 0);
       if (s.vx !== 0) s.facing = s.vx < 0 ? 'left' : 'right';
       s.vx *= this.playerSpeed;

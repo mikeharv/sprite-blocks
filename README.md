@@ -64,10 +64,13 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
     player fills its space and stays centred on the grid lines it isn't moving along, steering toward an open
     corridor, so it follows mazes and slides around corners. The character starred
     in a level is the player: keyboard control, followed by the camera, has health. "make … the player" switches
-    it at runtime. Class selectors such as "character" never include the player; use "the player" for that.
+    it at runtime. While the player is running a path, the path moves it instead of the keyboard (for cut-scenes
+    such as walking to a door); the keyboard takes over again when the path stops. Class selectors such as "character" never include the player; use "the player" for that.
   * platform: one-way ground that can be jumped through from below.
   * obstacle: solid on every side. Standing on or pushing against a solid sprite counts as touching it.
   * item: no built-in behaviour. Each item is drawn either behind platforms (trees, doors) or in front of them.
+* **Jumping by rule:** "make … bounce" works anywhere, for springs and stomps; put it inside "if … is on the
+  ground" to jump only from the ground, like the player. "set jump height" changes the player's own jump.
 * **Costumes:** a sprite with several costumes either animates while it moves (walkers) or all the time (coins,
   flags). Characters mirror their costume to face the way they move; planes and thrown daggers rotate instead.
 * **Joining textures:** ground blocks, ledges, cakes, walls and fences join up with neighbouring sprites of the
@@ -87,7 +90,8 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   warning. The game plays some sounds by itself (jump, falling out, running out of health, winning, game over);
   the "set sound for … to …" block changes or silences them.
 * **Block colours** are chosen so every category on the same workspace looks clearly different, including for
-  red-green colour-blind users, and stays dark enough for white text. They're defined in `src/blocks/toolbox.ts`.
+  red-green colour-blind users, and stays as bright as white text allows. Sprites and Paths are the logo's
+  orange and blue. They're defined in `src/blocks/toolbox.ts`.
 * **Warnings:** blocks warn about locations outside the level, missing sounds, sprites and paths, and
   platformer-only blocks (bounce, gravity, jumping) in games where every level is top-down.
 * **Health:** losing health makes the player flash and ignore damage for a moment. At 0 health the level

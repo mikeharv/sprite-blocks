@@ -1,5 +1,5 @@
 // Level editor: a scrollable DOM grid for placing sprites, plus level list and settings.
-import { BACKGROUNDS, cellBackground, cellLook, getAsset, getBackground, getSprite, imageUrl, thumbUrl } from '../assets';
+import { BACKGROUNDS, cellLook, cornerRects, getAsset, getBackground, getSprite, imageUrl, thumbUrl } from '../assets';
 import type { GameMode, Level, ViewSize } from '../model';
 import { BACKGROUND_COLORS, SPRITE_CLASSES, cellKey, newLevel, parseCellKey, uid, viewCols } from '../model';
 import { state } from '../state';
@@ -60,6 +60,14 @@ export class LevelEditor {
   private settings = el('div', { className: 'level-settings' });
   private palette = el('aside', { className: 'palette' });
   private grid = el('div', { className: 'level-grid' });
+  /**
+   * The level's sprites, drawn on one canvas behind the cells (which only draw the grid lines). Every space's
+   * edges fall on whole screen pixels, so joined pieces meet exactly at any zoom.
+   */
+  private art = el('canvas', { className: 'level-art' });
+  private artScale = 1;
+  private images = new Map<string, HTMLImageElement>();
+  private redrawQueued = false;
   private cameraBox = el('div', { className: 'camera-box' });
   private status = el('div', { className: 'level-status' });
   private gridScroll = el('div', { className: 'grid-scroll' }, [this.grid]);
@@ -74,6 +82,10 @@ export class LevelEditor {
     this.grid.addEventListener('pointermove', (e) => this.onPointerMove(e));
     this.grid.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('pointerup', () => this.endPaint());
+    // Browser zoom changes the screen pixel size: redraw the art to match.
+    window.addEventListener('resize', () => {
+      if (window.devicePixelRatio !== this.artScale) this.drawArt();
+    });
     this.grid.addEventListener('pointerleave', () => (this.status.textContent = this.statusText()));
 
     state.on((kind) => {
@@ -390,7 +402,8 @@ export class LevelEditor {
         frag.append(cell);
       }
     }
-    this.grid.replaceChildren(frag, this.cameraBox);
+    this.grid.replaceChildren(this.art, frag, this.cameraBox);
+    this.drawArt();
     this.updateCameraBox();
     this.status.textContent = this.statusText();
   }
@@ -409,10 +422,71 @@ export class LevelEditor {
     style.backgroundBlendMode = bg?.tint ? 'multiply' : '';
   }
 
+  /** Sizes the art canvas to the grid in screen pixels and draws every space. */
+  private drawArt(): void {
+    const lvl = this.level;
+    const s = this.cellSize;
+    this.artScale = window.devicePixelRatio || 1;
+    this.art.width = Math.round(lvl.cols * s * this.artScale);
+    this.art.height = Math.round(lvl.rows * s * this.artScale);
+    this.art.style.width = lvl.cols * s + 'px';
+    this.art.style.height = lvl.rows * s + 'px';
+    for (let y = 0; y < lvl.rows; y++) for (let x = 0; x < lvl.cols; x++) this.drawSpace(x, y);
+  }
+
+  /** Draws one space's sprite (the joined piece and any inner corner steps), filling the space exactly. */
+  private drawSpace(x: number, y: number): void {
+    const ctx = this.art.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    const edge = (n: number) => Math.round(n * this.cellSize * this.artScale);
+    const [l, t, r, b] = [edge(x), edge(y), edge(x + 1), edge(y + 1)];
+    ctx.clearRect(l, t, r - l, b - t);
+    const look = cellLook(this.level.cells, x, y);
+    const img = look && this.image(look.image);
+    if (!look || !img) return;
+    // Square images fill the space exactly, even when rounding makes it a pixel wider than it is tall, so
+    // joined pieces meet. Any other shape is fitted inside it, centred.
+    const w = r - l;
+    const h = b - t;
+    if (img.naturalWidth === img.naturalHeight) ctx.drawImage(img, l, t, w, h);
+    else {
+      const k = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      const iw = Math.round(img.naturalWidth * k);
+      const ih = Math.round(img.naturalHeight * k);
+      ctx.drawImage(img, l + Math.round((w - iw) / 2), t + Math.round((h - ih) / 2), iw, ih);
+    }
+    if (!look.outline) return;
+    ctx.fillStyle = look.outline;
+    const px = (n: number, size: number) => Math.round((n * size) / look.pixels);
+    for (const [cx, cy, cw, ch] of cornerRects(look.corners, look.pixels)) {
+      const x0 = l + px(cx, w);
+      const y0 = t + px(cy, h);
+      ctx.fillRect(x0, y0, l + px(cx + cw, w) - x0, t + px(cy + ch, h) - y0);
+    }
+  }
+
+  /** A loaded sprite image, or null while it loads (the art is redrawn once it arrives). */
+  private image(name: string): HTMLImageElement | null {
+    let img = this.images.get(name);
+    if (!img) {
+      img = new Image();
+      img.onload = () => {
+        if (this.redrawQueued) return;
+        this.redrawQueued = true;
+        requestAnimationFrame(() => {
+          this.redrawQueued = false;
+          this.drawArt();
+        });
+      };
+      img.src = imageUrl(name);
+      this.images.set(name, img);
+    }
+    return img.complete && img.naturalWidth ? img : null;
+  }
+
   private paintCell(cell: HTMLElement, x: number, y: number): void {
     const assetId = this.level.cells[cellKey(x, y)];
     const asset = getAsset(assetId);
-    cell.style.background = cellBackground(cellLook(this.level.cells, x, y), this.cellSize - 1);
     cell.title = asset ? asset.name + (assetId === this.level.player ? ' (player)' : '') : '';
     cell.classList.toggle('player', !!assetId && assetId === this.level.player);
   }
@@ -484,8 +558,12 @@ export class LevelEditor {
       this.renderPalette();
     }
     // Neighbours of joinable textures may need a different piece now.
-    for (const [cx, cy] of [[x, y], [x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
-      if (cx >= 0 && cy >= 0 && cx < lvl.cols && cy < lvl.rows) this.paintCell(this.cells[cy * lvl.cols + cx], cx, cy);
+    for (let cy = y - 1; cy <= y + 1; cy++) {
+      for (let cx = x - 1; cx <= x + 1; cx++) {
+        if (cx < 0 || cy < 0 || cx >= lvl.cols || cy >= lvl.rows) continue;
+        this.paintCell(this.cells[cy * lvl.cols + cx], cx, cy);
+        this.drawSpace(cx, cy);
+      }
     }
     this.dirty = true;
   }
