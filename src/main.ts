@@ -31,6 +31,7 @@ import {
 } from './storage';
 import { LevelEditor } from './ui/levelEditor';
 import { levelTour, startTour } from './ui/tour';
+import { isTablet } from './ui/device';
 import { AssetLibrary } from './ui/library';
 import { confirmDialog, el, openModal, toast } from './ui/modal';
 import {
@@ -63,6 +64,8 @@ const tutorial = route ? getTutorial(route[1]) : undefined;
 const mode: 'landing' | 'play' | 'tutorial' = tutorial ? 'tutorial' : location.hash.startsWith('#/play') ? 'play' : 'landing';
 window.addEventListener('hashchange', () => location.reload());
 document.body.dataset.mode = mode;
+// Tablets get a smaller game and instructions, so the blocks have room (see `body.tablet` in style.css).
+document.body.classList.toggle('tablet', isTablet());
 $('brand-home').addEventListener('click', () => (location.hash = '#/'));
 
 if (mode === 'landing') showLanding($('landing'));

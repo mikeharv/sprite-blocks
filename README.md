@@ -77,9 +77,9 @@ and Paths. More Blocks and Paths only need what both first paths teach, so eithe
 
 ### Program flow
 
-* **Start page and routes:** `#/` is the start page: a map of the tutorial paths (a "Start here" group with the
+* **Start page and routes:** `#/` is the start page: a link to the full editor (free play), then a map of the tutorial paths (a "Start here" group with the
   two first paths, arrows to the paths that build on them, green once a path is finished, and "Up next" on a path
-  whose prerequisites are all finished), then free play. On a narrow page the cards stack and each says what it
+  whose prerequisites are all finished). On a narrow page the cards stack and each says what it
   builds on. `#/play` is the full
   editor and `#/tutorial/<id>` (optionally `/<step>`) runs a tutorial. Changing route reloads the page, because
   the editor is set up differently in a tutorial.
@@ -108,6 +108,9 @@ and Paths. More Blocks and Paths only need what both first paths teach, so eithe
 * **Level editor tours:** the first time a tutorial opens the Level tab, a tour walks through it: a short one for
   the simplified editor, or one covering the level list, + Level, size, camera and background when the step shows
   every control. **Show me how** in the level editor's footer replays the tour that fits.
+* **Tablets** (`src/ui/device.ts`: iPads, Android tablets and other touch-first screens) get a smaller game and
+  instructions and a slightly zoomed-out workspace, so the blocks have room. Upright, the blocks fill the top and
+  the game and instructions sit side by side underneath.
 * **Getting started:** first-time visitors and new blank games are offered a short guided tour of the tabs. The
   **Tour** button in the header replays it. A blank game starts with no sprites or sounds. **New** also offers two
   examples: Coin Run (platformer) and Garden Gem Hunt (top-down).

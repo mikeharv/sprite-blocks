@@ -11,8 +11,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 /**
  * Where each path sits on the map (a grid area; see `.path-map` in style.css). The layout keeps the arrows from
- * crossing cards: More Blocks leads down to Bigger Games and across to Variables, and Variables and Paths both
- * lead to Loops and Logic. A path missing here goes at the end.
+ * crossing cards: More Blocks leads down to Bigger Games and Variables, and Variables and Paths both lead down to
+ * Loops and Logic, alone on the bottom row. A path missing here goes at the end.
  */
 const MAP_AREAS: Record<string, string> = {
   'more-blocks': 'more',
@@ -135,17 +135,6 @@ export function showLanding(root: HTMLElement): void {
       el('section', { className: 'landing-hero' }, [
         el('h1', { textContent: 'Make your own game' }),
         el('p', { textContent: 'Paint levels, send sprites along paths, and write the rules with blocks.' }),
-      ]),
-      el('section', { className: 'landing-section' }, [
-        el('h2', { textContent: 'Choose your path' }),
-        el('p', {
-          className: 'landing-note',
-          textContent: 'Each path builds one game, a step at a time. Start at the top, then follow the arrows to the next ones.',
-        }),
-        map,
-      ]),
-      el('section', { className: 'landing-section' }, [
-        el('h2', { textContent: 'Free play' }),
         el('a', { className: 'landing-card free-card', href: '#/play' }, [
           el('div', { className: 'free-icon', textContent: '🧱' }),
           el('div', { className: 'landing-card-body' }, [
@@ -158,6 +147,14 @@ export function showLanding(root: HTMLElement): void {
           ]),
           el('span', { className: 'btn primary', textContent: 'Open' }),
         ]),
+      ]),
+      el('section', { className: 'landing-section' }, [
+        el('h2', { textContent: 'Choose your path' }),
+        el('p', {
+          className: 'landing-note',
+          textContent: 'Each path builds one game, a step at a time. Start at the top, then follow the arrows to the next ones.',
+        }),
+        map,
       ]),
     ]),
   );
@@ -210,14 +207,17 @@ function drawLinks(map: HTMLElement, svg: SVGSVGElement, finished: (id: string) 
   for (const t of TUTORIALS) {
     const to = box(t.id);
     if (!to) continue;
-    for (const from of t.after ?? []) {
+    const after = t.after ?? [];
+    after.forEach((from, i) => {
       const a = box(from);
-      if (!a) continue;
+      if (!a) return;
+      // Arrows arriving at the same card land side by side.
+      const spread = (i - (after.length - 1) / 2) * 44;
       const gap = 6;
       let d: string;
       if (to.t >= a.b) {
         // Below: leave the bottom (under the target, if the source is wide) and arrive at the top.
-        const tx = (to.l + to.r) / 2;
+        const tx = (to.l + to.r) / 2 + spread;
         const sx = Math.max(a.l + 24, Math.min(a.r - 24, tx));
         const sy = a.b + gap;
         const ty = to.t - gap;
@@ -237,6 +237,6 @@ function drawLinks(map: HTMLElement, svg: SVGSVGElement, finished: (id: string) 
       line.classList.add('path-link', kind);
       line.setAttribute('marker-end', `url(#path-arrow-${kind})`);
       svg.append(line);
-    }
+    });
   }
 }

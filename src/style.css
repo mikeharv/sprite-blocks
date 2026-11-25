@@ -328,6 +328,24 @@ body {
   .project-name input { width: 140px; }
 }
 
+/* Tablets: a smaller game and instructions, so the block workspace gets most of the screen. */
+body.tablet { --game-w: 330px; }
+body.tablet .game-help { display: none; }
+body.tablet .tutorial-panel { font-size: 14px; line-height: 1.4; padding: 10px 12px; max-height: 40vh; }
+body.tablet .tutorial-panel h2 { font-size: 16px; }
+/* Upright tablets: the blocks fill the top, with the game and the instructions side by side underneath. */
+@media (orientation: portrait) {
+  body.tablet .app { flex-direction: column; }
+  body.tablet .editor-pane { flex: 1; min-height: 0; }
+  body.tablet .game-pane {
+    width: 100%; max-height: 34vh; display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 1fr);
+    grid-auto-rows: min-content; column-gap: 10px; row-gap: 6px;
+  }
+  body.tablet .game-pane > * { grid-column: 1; }
+  body.tablet .game-pane > .tutorial-panel { grid-column: 2; grid-row: 1 / span 20; max-height: 34vh; min-height: 0; }
+  body.tablet .app.expanded .game-pane { display: flex; max-height: none; }
+}
+
 /* ---------------------------------------------------------------- sprites tab */
 
 #sprites-view { overflow-y: auto; }
@@ -445,7 +463,7 @@ body[data-mode='tutorial'] #save-state { display: none; }
 /* The path map: the first paths in a "Start here" group, the rest placed so the arrows between them don't cross. */
 .path-map {
   position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px 48px;
-  grid-template-areas: 'start start start' 'more . paths' 'bigger vars logic';
+  grid-template-areas: 'start start start' 'more . paths' 'bigger vars .' '. logic .';
 }
 .path-map > .landing-card, .path-start { position: relative; z-index: 1; }
 .path-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
@@ -481,6 +499,7 @@ body[data-mode='tutorial'] #save-state { display: none; }
   .path-start-cards { flex-direction: column; align-items: stretch; }
   .path-start-cards > .landing-card { width: auto; }
 }
+.landing-hero .free-card { margin-top: 16px; }
 .free-card { flex-direction: row; align-items: center; gap: 14px; padding-right: 16px; }
 .free-icon { font-size: 40px; padding-left: 18px; }
 

@@ -1,5 +1,6 @@
 // Creates the main and paths Blockly workspaces and keeps them in sync with each other and the levels.
 import * as Blockly from 'blockly/core';
+import { isTablet } from './ui/device';
 import { javascriptGenerator } from 'blockly/javascript';
 import { FieldGridLocation, FieldLevel, FieldPath, FieldSound, FieldSpriteAsset } from './blocks/fields';
 import { getAsset, getSound } from './assets';
@@ -44,7 +45,8 @@ const workspaceOptions = (toolbox: Blockly.utils.toolbox.ToolboxDefinition): Blo
   renderer: 'thrasos',
   trashcan: true,
   sounds: false,
-  zoom: { controls: true, wheel: true, startScale: 0.9, maxScale: 2, minScale: 0.3, scaleSpeed: 1.15 },
+  // Tablets start a little zoomed out, so more of the blocks fit beside the smaller game.
+  zoom: { controls: true, wheel: true, startScale: isTablet() ? 0.72 : 0.9, maxScale: 2, minScale: 0.3, scaleSpeed: 1.15 },
   move: { scrollbars: true, drag: true, wheel: false },
   grid: { spacing: 24, length: 2, colour: '#dde1ea', snap: false },
 });
