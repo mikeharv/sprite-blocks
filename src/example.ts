@@ -49,7 +49,7 @@ function examplePaths(): object {
       blocks: [
         pathDef('patrol', 20, 20, {}, chain(move('left', 3), move('right', 3))),
         pathDef(
-          'bob',
+          'up and down',
           20,
           200,
           { gravity: 'ignore' },
@@ -57,14 +57,14 @@ function examplePaths(): object {
         ),
         pathDef('chase', 300, 20, {}, chain(block('sb_path_move_toward', { inputs: { N: shadowNum(1) } }))),
         pathDef(
-          'fly square',
+          'square',
           300,
           160,
           { gravity: 'ignore' },
           chain(move('right', 2), move('down', 2), move('left', 2), move('up', 2)),
         ),
         pathDef(
-          'fly forward',
+          'straight ahead',
           580,
           280,
           { loop: 'stop', gravity: 'ignore', edges: 'fall' },
@@ -115,7 +115,7 @@ function coinRunMain(): object {
           inputs: {
             DO: chain(
               block('sb_set_path', { fields: { PATH: 'patrol' }, inputs: { SPRITE: all('class:character') } }),
-              block('sb_set_path', { fields: { PATH: 'bob' }, inputs: { SPRITE: all('asset:coin') } }),
+              block('sb_set_path', { fields: { PATH: 'up and down' }, inputs: { SPRITE: all('asset:coin') } }),
             ),
           },
         },
@@ -231,7 +231,7 @@ function gardenMain(): object {
           y: 20,
           inputs: {
             DO: chain(
-              block('sb_set_path', { fields: { PATH: 'fly square' }, inputs: { SPRITE: all('asset:bat') } }),
+              block('sb_set_path', { fields: { PATH: 'square' }, inputs: { SPRITE: all('asset:bat') } }),
               block('sb_set_path', { fields: { PATH: 'patrol' }, inputs: { SPRITE: all('asset:spider') } }),
               setMagic(false),
             ),
@@ -290,7 +290,7 @@ function gardenMain(): object {
                 IF0: block('variables_get', { fields: { VAR: { id: MAGIC.id } } }),
                 DO0: chain(
                   block('sb_throw', {
-                    fields: { ASSET: 'sparkle', PATH: 'fly forward' },
+                    fields: { ASSET: 'sparkle', PATH: 'straight ahead' },
                     inputs: { SPRITE: block('sb_player') },
                   }),
                   sound('zap'),

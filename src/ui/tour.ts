@@ -1,7 +1,7 @@
 // Optional guided tour: spotlights each part of the app and explains the flow of making a game.
 import { el } from './modal';
 
-interface TourStep {
+export interface TourStep {
   title: string;
   text: string;
   /** Element to spotlight. Omitted for centred steps. */
@@ -10,9 +10,9 @@ interface TourStep {
   tab?: string;
 }
 
-const STEPS: TourStep[] = [
+const APP_STEPS: TourStep[] = [
   {
-    title: 'Welcome to Sprite Blocks!',
+    title: 'Welcome to Sprite Paths!',
     text:
       'You make a game in four steps, left to right along the tabs: choose sprites, build levels, add rules ' +
       'with blocks, and give sprites paths to follow. Then press Run, play, and keep improving it. ' +
@@ -70,9 +70,93 @@ const STEPS: TourStep[] = [
   },
 ];
 
+/** A short tour of the simplified level editor that tutorials show (just the grid and the palette). */
+export const LEVEL_EDITOR_STEPS: TourStep[] = [
+  {
+    title: 'Build your level',
+    target: '.level-body',
+    text: 'This is where you build the level for your game: put sprites where you want them. Let’s look around!',
+  },
+  {
+    title: 'Pick a sprite',
+    target: '.palette',
+    text: 'These are your sprites. Click one to pick it. People and animals are at the top, then walls, then other things.',
+  },
+  {
+    title: 'Paint it in',
+    target: '.grid-scroll',
+    text: 'Click a square to put your sprite there. Hold the mouse down and drag to paint lots of squares at once.',
+  },
+  {
+    title: 'Choose the player',
+    target: '.palette-row',
+    text: 'Click the ☆ next to a character to make it the player. That’s the one you move with the arrow keys.',
+  },
+  {
+    title: 'Fix mistakes',
+    target: '[data-tool="eraser"]',
+    text: 'Pick the eraser and click squares to clear them. You can also click a sprite again with the same sprite picked.',
+  },
+  {
+    title: 'Move things around',
+    target: '[data-tool="select"]',
+    text: 'Pick this, then drag a box around some sprites. Drag the box to move them all at once.',
+  },
+  {
+    title: 'Try it out',
+    target: '.game-pane',
+    text: 'Press ▶ Run to play your new level. You can see this tour again with the “Show me how” button.',
+  },
+];
+
+/** The level editor tour with every control: levels, size, camera and background, then painting. */
+export const LEVEL_EDITOR_FULL_STEPS: TourStep[] = [
+  {
+    title: 'Your levels',
+    target: '.level-tabs',
+    text: 'A big game can have lots of levels. Click a level’s name to work on it. The game starts on level 1, and “go to next level” goes along this list.',
+  },
+  {
+    title: 'Add a level',
+    target: '.level-add',
+    text: '+ Level adds a new, empty level at the end. Double-click a level’s name to rename it.',
+  },
+  {
+    title: 'Make it bigger',
+    target: '.level-size',
+    text: 'Change the Width and Height to make the level bigger. The camera follows the player, so a big level scrolls as you move.',
+  },
+  {
+    title: 'Camera',
+    target: '.level-camera',
+    text: 'Close shows a small part of the level. Wide shows more of it at once.',
+  },
+  {
+    title: 'Background',
+    target: '.level-background',
+    text: 'Pick a sky that scrolls behind the level, a floor tile, or a plain color.',
+  },
+  {
+    title: 'Build it',
+    target: '.level-body',
+    text: 'Pick a sprite on the left and click or drag on the grid to paint it. Use the ☆ to choose the player, the eraser to fix mistakes, and Undo if you change your mind.',
+  },
+  {
+    title: 'Try it out',
+    target: '.game-pane',
+    text: 'Press ▶ Run to play. The game starts on level 1. You can see this tour again with the “Show me how” button.',
+  },
+];
+
+/** The tour for the level editor as shown: simplified (tutorials) or with every control. */
+export function levelTour(simple: boolean): TourStep[] {
+  return simple ? LEVEL_EDITOR_STEPS : LEVEL_EDITOR_FULL_STEPS;
+}
+
 let active: { close: () => void } | null = null;
 
-export function startTour(): void {
+/** Shows a tour: the full app tour, or the given steps. `onClose` runs when it ends or is skipped. */
+export function startTour(STEPS: TourStep[] = APP_STEPS, onClose?: () => void): void {
   active?.close();
   let index = 0;
 
@@ -142,13 +226,17 @@ export function startTour(): void {
     progress.textContent = `${index + 1} of ${STEPS.length}`;
     back.disabled = index === 0;
     next.textContent = index === STEPS.length - 1 ? 'Finish' : index === 0 ? 'Start' : 'Next';
+    // On a short screen the target may be scrolled out of sight.
+    if (step.target) document.querySelector(step.target)?.scrollIntoView({ block: 'nearest' });
     requestAnimationFrame(place);
     next.focus();
   };
 
   const close = () => {
+    onClose?.();
     layer.remove();
     window.removeEventListener('resize', place);
+    window.removeEventListener('scroll', place, true);
     document.removeEventListener('keydown', onKey);
     active = null;
   };
@@ -168,6 +256,7 @@ export function startTour(): void {
   next.addEventListener('click', () => go(1));
   skip.addEventListener('click', close);
   window.addEventListener('resize', place);
+  window.addEventListener('scroll', place, true);
   document.addEventListener('keydown', onKey);
   active = { close };
   show();

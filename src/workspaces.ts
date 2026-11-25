@@ -1,9 +1,9 @@
 // Creates the main and paths Blockly workspaces and keeps them in sync with each other and the levels.
 import * as Blockly from 'blockly/core';
 import { javascriptGenerator } from 'blockly/javascript';
-import { FieldGridLocation, FieldPath, FieldSound, FieldSpriteAsset } from './blocks/fields';
+import { FieldGridLocation, FieldLevel, FieldPath, FieldSound, FieldSpriteAsset } from './blocks/fields';
 import { getAsset, getSound } from './assets';
-import { compilePaths } from './blocks/path_blocks';
+import { compilePaths, pathGenerator } from './blocks/path_blocks';
 import { pathNames, setPathWorkspace } from './blocks/path_registry';
 import { MAIN_TOOLBOX, pathToolbox, registerToolboxCallbacks, theme } from './blocks/toolbox';
 import { levelSetupCode } from './compile';
@@ -14,6 +14,29 @@ import { state } from './state';
 let main: Blockly.WorkspaceSvg;
 let paths: Blockly.WorkspaceSvg;
 let loading = false;
+
+type ToolboxProvider = (ws: Blockly.WorkspaceSvg) => Blockly.utils.toolbox.ToolboxDefinition;
+/** Where each workspace's toolbox comes from: the full toolboxes, or a tutorial step's cut-down flyouts. */
+let mainToolbox: ToolboxProvider = () => MAIN_TOOLBOX;
+let pathsToolbox: ToolboxProvider = () => pathToolbox();
+
+/** Uses these toolboxes from now on (both must keep the same kind as at start: categories or a flyout). */
+export function setToolboxes(mainProvider: ToolboxProvider, pathsProvider: ToolboxProvider): void {
+  mainToolbox = mainProvider;
+  pathsToolbox = pathsProvider;
+  if (main) refreshToolboxes();
+}
+
+/** Rebuilds the toolboxes, so dropdown defaults and path names match the project. */
+export function refreshToolboxes(): void {
+  refreshMainToolbox();
+  paths.updateToolbox(pathsToolbox(paths));
+}
+
+function refreshMainToolbox(): void {
+  if (main.getToolbox()) main.refreshToolboxSelection();
+  else main.updateToolbox(mainToolbox(main));
+}
 
 const workspaceOptions = (toolbox: Blockly.utils.toolbox.ToolboxDefinition): Blockly.BlocklyOptions => ({
   toolbox,
@@ -34,15 +57,27 @@ export function pathsWorkspace(): Blockly.WorkspaceSvg {
   return paths;
 }
 
+/**
+ * Creates both workspaces. With `toolboxes` (tutorial steps), each workspace gets a plain flyout from its
+ * provider; otherwise the full categorized toolboxes. Blockly fixes the kind of toolbox when a workspace is
+ * created, so it can't switch between the two afterwards.
+ */
 export function initWorkspaces(
   mainEl: HTMLElement,
   pathsEl: HTMLElement,
   callbacks: { onChange: () => void },
+  toolboxes?: { main: ToolboxProvider; paths: ToolboxProvider },
 ): void {
-  main = Blockly.inject(mainEl, workspaceOptions(MAIN_TOOLBOX));
-  paths = Blockly.inject(pathsEl, workspaceOptions(pathToolbox()));
-  setPathWorkspace(paths);
+  const flyout = { kind: 'flyoutToolbox', contents: [] } as Blockly.utils.toolbox.ToolboxDefinition;
+  main = Blockly.inject(mainEl, workspaceOptions(toolboxes ? flyout : MAIN_TOOLBOX));
   registerToolboxCallbacks(main);
+  paths = Blockly.inject(pathsEl, workspaceOptions(toolboxes ? flyout : pathToolbox()));
+  setPathWorkspace(paths);
+  // The flyouts are filled once a project is open (their dropdown defaults come from it).
+  if (toolboxes) {
+    mainToolbox = toolboxes.main;
+    pathsToolbox = toolboxes.paths;
+  }
 
   main.addChangeListener(Blockly.Events.disableOrphans);
   paths.addChangeListener(Blockly.Events.disableOrphans);
@@ -54,9 +89,19 @@ export function initWorkspaces(
   };
   paths.addChangeListener((e) => {
     // Path names appear in main-workspace dropdowns: keep the flyout in step.
-    if (!e.isUiEvent && !loading) main.refreshToolboxSelection();
+    if (!e.isUiEvent && !loading) refreshMainToolbox();
   });
   main.addChangeListener(changed);
+  // Tutorial flyouts list the variable blocks for the variables that exist: keep them in step.
+  const VARIABLE_EVENTS: string[] = [Blockly.Events.VAR_CREATE, Blockly.Events.VAR_DELETE, Blockly.Events.VAR_RENAME];
+  if (toolboxes) {
+    main.addChangeListener((e) => {
+      if (!loading && VARIABLE_EVENTS.includes(e.type)) main.updateToolbox(mainToolbox(main));
+    });
+    paths.addChangeListener((e) => {
+      if (!loading && VARIABLE_EVENTS.includes(e.type)) paths.updateToolbox(pathsToolbox(paths));
+    });
+  }
   paths.addChangeListener((e) => {
     if (loading) return;
     if (e.type === Blockly.Events.BLOCK_CHANGE) {
@@ -71,10 +116,15 @@ export function initWorkspaces(
 
   state.on((kind) => {
     if (kind === 'assets' || kind === 'sounds' || kind === 'level' || kind === 'currentLevel' || kind === 'levels') {
+      // Level names show in "when level … starts" blocks: redraw them after a rename or reorder.
+      if (kind === 'levels') {
+        for (const block of main.getBlocksByType('sb_when_level_named_starts', false)) {
+          block.getField('LEVEL')?.forceRerender();
+        }
+      }
       refreshWarnings();
       // Rebuild flyouts so dropdown defaults match the project's assets.
-      main.refreshToolboxSelection();
-      paths.updateToolbox(pathToolbox());
+      refreshToolboxes();
     }
   });
 }
@@ -93,6 +143,11 @@ function renamePathReferences(oldName: string, newName: string): void {
 /** Blocks that only do something in platformer levels. */
 const PLATFORMER_ONLY = new Set(['sb_bounce', 'sb_set_gravity', 'sb_jump_height', 'sb_on_ground', 'sb_path_jump', 'sb_path_on_ground']);
 
+/** Warning text broken onto lines of about 50 characters, so the bubble fits on screen. */
+export function wrapWarning(text: string): string {
+  return Blockly.utils.string.wrap(text, 50);
+}
+
 /** Problems with one block's own fields, or null. */
 function blockWarnings(block: Blockly.Block, names: Set<string>, platformer: boolean): string[] {
   const level = state.level;
@@ -106,10 +161,20 @@ function blockWarnings(block: Blockly.Block, names: Set<string>, platformer: boo
         out.push(`The sound “${getSound(field.getValue())?.name}” isn’t in your project. Add it on the Sprites tab.`);
       } else if (field instanceof FieldSpriteAsset && !field.isInProject()) {
         out.push(`“${getAsset(field.getValue())?.name}” isn’t in your project. Add it on the Sprites tab.`);
+      } else if (field instanceof FieldLevel && !field.exists()) {
+        out.push('That level has been deleted. Pick another level.');
       } else if (field instanceof FieldPath && !names.has(field.getValue() ?? '')) {
         out.push(`There is no path named “${field.getValue()}”. Create it on the Paths tab.`);
       }
     }
+  }
+  // Restarting while the level starts would restart it forever: the game looks frozen.
+  const root = block.getRootBlock().type;
+  if (block.type === 'sb_restart_level' && (root === 'sb_when_level_starts' || root === 'sb_when_level_named_starts')) {
+    out.push(
+      'This restarts the level every time it starts, so the level never gets going and the game looks stuck. ' +
+        'Put “restart level” in another event, like “when the player touches …”.',
+    );
   }
   if (!platformer && PLATFORMER_ONLY.has(block.type)) {
     out.push('Every level is top-down, so this block does nothing. It only works in platformer levels.');
@@ -139,7 +204,7 @@ export function refreshWarnings(): void {
       if (block.isInFlyout || block.isShadow()) continue;
       const text = found.get(block)?.join('\n\n') ?? null;
       if (text || block.hasIcon(Blockly.icons.IconType.WARNING)) {
-        block.setWarningText(text, 'sb_check');
+        block.setWarningText(text && wrapWarning(text), 'sb_check');
       }
     }
   }
@@ -233,14 +298,51 @@ export function saveWorkspaces(): { main: object; paths: object } {
   };
 }
 
-export function compileProject(project: Project): CompiledProgram {
+/**
+ * Compiles the project. With `trackBlocks` (tutorial runs), every block reports its id just before it runs, so
+ * tutorial checks can ask whether a kind of block actually ran.
+ */
+export function compileProject(project: Project, trackBlocks = false): CompiledProgram {
   const levels = structuredClone(project.levels);
   return {
     levels,
     levelSetup: levels.map(levelSetupCode),
-    main: javascriptGenerator.workspaceToCode(main),
-    paths: compilePaths(paths),
+    main: exposeVariables(withRanReports(javascriptGenerator, main, '$g.ran(%1);\n', trackBlocks, () => javascriptGenerator.workspaceToCode(main))),
+    paths: withRanReports(pathGenerator, paths, '$p.ran(%1);\n', trackBlocks, () => compilePaths(paths)),
   };
+}
+
+/**
+ * Generates code with Blockly's statement prefix set to report each block as it runs. Top blocks (events, paths
+ * and functions) are left out: their code runs when the program is set up, not when the event happens.
+ */
+function withRanReports(
+  generator: { STATEMENT_PREFIX: string | null },
+  ws: Blockly.Workspace,
+  prefix: string,
+  on: boolean,
+  generate: () => string,
+): string {
+  if (!on) return generate();
+  const tops = ws.getTopBlocks(false).map((b) => [b, b.suppressPrefixSuffix] as const);
+  tops.forEach(([b]) => (b.suppressPrefixSuffix = true));
+  generator.STATEMENT_PREFIX = prefix;
+  try {
+    return generate();
+  } finally {
+    generator.STATEMENT_PREFIX = null;
+    tops.forEach(([b, before]) => (b.suppressPrefixSuffix = before));
+  }
+}
+
+/**
+ * Adds a line that hands the engine a reader for the program's variables (Blockly declares them in one `var`
+ * line at the top), so tutorial checks can look at them.
+ */
+function exposeVariables(code: string): string {
+  const names = /^var ([\w$, ]+);$/m.exec(code)?.[1].split(',').map((n) => n.trim()).filter(Boolean) ?? [];
+  if (!names.length) return code;
+  return code + `$g.exposeVariables(function () {\n  return { ${names.map((n) => `${n}: ${n}`).join(', ')} };\n});\n`;
 }
 
 /** Scrolls so the top-left of the blocks is just inside the visible area, beside the toolbox. */

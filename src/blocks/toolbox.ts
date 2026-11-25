@@ -16,7 +16,7 @@ export const COLORS = {
   sprite: '#3f8fd6',
   path: '#8a5cd1',
   pathDef: '#6b3fb5',
-  pathAction: '#8a5cd1',
+  pathAction: '#3f8fd6',
   pathSensing: '#8a5cd1',
   game: '#2fa37f',
   logic: '#5b80a5',
@@ -55,6 +55,8 @@ for (const [key, style] of Object.entries(STYLES)) {
 }
 // Dynamic variables share the variable colour.
 blockStyles.variable_dynamic_blocks = { colourPrimary: COLORS.variables };
+// Tutorial checks (shown read-only).
+blockStyles.validation_blocks = { colourPrimary: '#607089' };
 
 export const theme = Blockly.Theme.defineTheme('spriteblocks', {
   name: 'spriteblocks',
@@ -212,6 +214,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
       contents: [
         { kind: 'block', type: 'sb_when_game_starts' },
         { kind: 'block', type: 'sb_when_level_starts' },
+        { kind: 'block', type: 'sb_when_level_named_starts' },
         { kind: 'block', type: 'sb_when_touch' },
         { kind: 'block', type: 'sb_while_touch' },
         { kind: 'block', type: 'sb_this_sprite' },
@@ -300,7 +303,7 @@ export const MAIN_TOOLBOX: Blockly.utils.toolbox.ToolboxDefinition = {
 /** Categorized toolbox for the paths workspace; the throw block defaults to a project item and a path. */
 export function pathToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
   const names = pathNames();
-  const throwPath = names.includes('fly forward') ? 'fly forward' : (names[0] ?? '');
+  const throwPath = names.includes('straight ahead') ? 'straight ahead' : (names[0] ?? '');
   return {
     kind: 'categoryToolbox',
     contents: [
@@ -394,4 +397,80 @@ export function pathToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
       { kind: 'category', name: 'Functions', categorystyle: 'procedure_category', custom: 'PROCEDURE' },
     ],
   };
+}
+
+// ---------------------------------------------------------------- cut-down toolboxes (tutorial steps)
+
+type BlockInfo = Blockly.utils.toolbox.BlockInfo;
+/** A block a tutorial step allows: a block type (taken as the full toolbox offers it), or a ready-made block. */
+export type ToolboxEntry = string | (Omit<BlockInfo, 'kind'> & { type: string });
+/** A toolbox entry for the "Create variable" button; the variable blocks follow once a variable exists. */
+export const MAKE_VARIABLE = '@make-variable';
+const VARIABLE_BLOCKS = ['variables_set', 'variables_get', 'math_change'];
+
+/** Every block the full toolbox offers, in toolbox order, with dynamic categories expanded. */
+function catalog(
+  contents: Blockly.utils.toolbox.ToolboxItemInfo[],
+  custom: Record<string, () => Blockly.utils.toolbox.FlyoutItemInfoArray | Blockly.utils.toolbox.ToolboxItemInfo[]>,
+): BlockInfo[] {
+  const out: BlockInfo[] = [];
+  const add = (items: unknown[]) => {
+    for (const item of items as { kind?: string; contents?: unknown[]; custom?: string }[]) {
+      if (item.kind === 'block' || item.kind === 'button') out.push(item as BlockInfo);
+      else if (item.kind === 'category') {
+        if (item.custom) add((custom[item.custom]?.() ?? []) as unknown[]);
+        else add(item.contents ?? []);
+      }
+    }
+  };
+  add(contents);
+  return out;
+}
+
+/**
+ * The allowed blocks, in the order the full toolbox shows them (category by category), so a learner finds them
+ * in the same order later. Entries for the same block keep the order they were listed in.
+ */
+function restrict(blocks: BlockInfo[], allowed: ToolboxEntry[]): Blockly.utils.toolbox.ToolboxDefinition {
+  const typeOf = (entry: ToolboxEntry) => (typeof entry === 'string' ? entry : entry.type);
+  const find = (entry: ToolboxEntry) =>
+    blocks.findIndex((b) =>
+      entry === MAKE_VARIABLE
+        ? (b as { callbackkey?: string }).callbackkey === 'CREATE_VARIABLE'
+        : (b as { type?: string }).type === typeOf(entry),
+    );
+  const position = (entry: ToolboxEntry) => {
+    const i = find(entry);
+    return i < 0 ? blocks.length : i;
+  };
+  const sorted = allowed.map((entry, i) => ({ entry, i })).sort((a, b) => position(a.entry) - position(b.entry) || a.i - b.i);
+  const contents: BlockInfo[] = [];
+  for (const { entry } of sorted) {
+    if (typeof entry === 'string') {
+      const found = blocks[find(entry)];
+      if (found) contents.push(structuredClone(found));
+      // Variable blocks only exist once there is a variable: leave them out until then.
+      else if (entry !== MAKE_VARIABLE && !VARIABLE_BLOCKS.includes(entry)) contents.push({ kind: 'block', type: entry });
+    } else contents.push({ kind: 'block', ...structuredClone(entry) } as BlockInfo);
+  }
+  return { kind: 'flyoutToolbox', contents } as Blockly.utils.toolbox.ToolboxDefinition;
+}
+
+/** A flyout of just the allowed Rules blocks, taken from the full Rules toolbox. */
+export function restrictedMainToolbox(ws: Blockly.WorkspaceSvg, allowed: ToolboxEntry[]): Blockly.utils.toolbox.ToolboxDefinition {
+  const blocks = catalog((MAIN_TOOLBOX as { contents: Blockly.utils.toolbox.ToolboxItemInfo[] }).contents, {
+    SPRITES: spriteCategory,
+    PATHS: pathsCategory,
+    GAME: gameCategory,
+    GAME_VARIABLES: () => variablesCategory(ws),
+  });
+  return restrict(blocks, allowed);
+}
+
+/** A flyout of just the allowed Paths blocks, taken from the full Paths toolbox. */
+export function restrictedPathToolbox(ws: Blockly.WorkspaceSvg, allowed: ToolboxEntry[]): Blockly.utils.toolbox.ToolboxDefinition {
+  const blocks = catalog((pathToolbox() as { contents: Blockly.utils.toolbox.ToolboxItemInfo[] }).contents, {
+    VARIABLE: () => Blockly.Variables.flyoutCategory(ws),
+  });
+  return restrict(blocks, allowed);
 }

@@ -62,7 +62,8 @@ export class FieldSpriteSelector extends FieldDynamicDropdown {
     for (const c of SPRITE_CLASSES) opts.push([c.label, 'class:' + c.id]);
     const assets = state.spriteAssetIds;
     if (assets.length) opts.push(SEP);
-    for (const id of assets) opts.push([getAsset(id)!.name, 'asset:' + id]);
+    // A specific sprite shows its picture (in the menu and on the block) instead of its name.
+    for (const id of assets) opts.push([imageOption(id)[0], 'asset:' + id]);
     return opts;
   }
 
@@ -121,6 +122,38 @@ export class FieldBackground extends FieldDynamicDropdown {
 }
 
 /** Picks a named path defined in the paths workspace. */
+/** Picks one of the project's levels by id, so renaming or reordering levels keeps the choice. */
+export class FieldLevel extends FieldDynamicDropdown {
+  static fromJson(options: Blockly.FieldDropdownFromJsonConfig & { value?: string }) {
+    return new FieldLevel(options.value ?? state.project?.levels[0]?.id ?? '');
+  }
+
+  protected options(): MenuOption[] {
+    return (state.project?.levels ?? []).map((l, i) => [`${i + 1}. ${l.name}`, l.id] as MenuOption);
+  }
+
+  protected override labelFor(value: string): string {
+    return this.exists() || !value ? value : '(deleted level)';
+  }
+
+  /** Whether the chosen level is still in the project. */
+  exists(): boolean {
+    const id = this.getValue();
+    return !!id && (state.project?.levels ?? []).some((l) => l.id === id);
+  }
+
+  override getText_(): string | null {
+    const id = this.getValue() ?? '';
+    const levels = state.project?.levels ?? [];
+    const i = levels.findIndex((l) => l.id === id);
+    return i >= 0 ? `${i + 1}. ${levels[i].name}` : '(deleted level)';
+  }
+
+  protected isValid(): boolean {
+    return true;
+  }
+}
+
 export class FieldPath extends FieldDynamicDropdown {
   static fromJson(options: Blockly.FieldDropdownFromJsonConfig & { value?: string }) {
     return new FieldPath(options.value ?? '');
@@ -264,6 +297,7 @@ export function registerFields(): void {
   Blockly.fieldRegistry.register('field_sprite_asset', FieldSpriteAsset);
   Blockly.fieldRegistry.register('field_background', FieldBackground);
   Blockly.fieldRegistry.register('field_path', FieldPath);
+  Blockly.fieldRegistry.register('field_level', FieldLevel);
   Blockly.fieldRegistry.register('field_sound', FieldSound);
   Blockly.fieldRegistry.register('field_sound_or_none', FieldSoundOrNone);
   Blockly.fieldRegistry.register('field_grid_location', FieldGridLocation);

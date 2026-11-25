@@ -210,6 +210,11 @@ export class PathContext {
     return this.game.gravityActive(this.sprite);
   }
 
+  /** A block is about to run (tutorial runs only). */
+  ran(blockId: string): void {
+    this.game.ranBlocks.add(blockId);
+  }
+
   /** Loop trap: pause a frame if a path loop runs without moving. */
   trap(): boolean {
     if (--this.budget < 0) {
@@ -407,6 +412,8 @@ interface TouchHandler {
 export interface GameCallbacks {
   onError(message: string): void;
   onStatus(status: 'idle' | 'running' | 'stopped'): void;
+  /** Called at the end of every frame of a running game (tutorial checks watch the game here). */
+  onFrame?(): void;
 }
 
 const KEY_NAMES: Record<string, string> = {
@@ -448,6 +455,22 @@ export class Game {
   // Game state
   running = false;
   finished: '' | 'won' | 'lost' = '';
+  /** Since the game started: how many times a level restarted, and what the player has touched. */
+  restarts = 0;
+  /** What blocks have done since the game started ("sound", "message", "create"…), for tutorial checks. */
+  happened = new Set<string>();
+  /** Ids of blocks that have run this game (tutorial runs report them; see `compileProject`). */
+  ranBlocks = new Set<string>();
+  /** Tutorials: record every pair of sprites that touch ("asset:coin|class:character"…). Off otherwise. */
+  trackTouches = false;
+  touchedPairs = new Set<string>();
+  /** Reads the values of the learner's variables (set by the compiled program). */
+  variables: () => Record<string, unknown> = () => ({});
+  /** Frame the current level was loaded on, and restarts in a row that came right after loading. */
+  private levelLoadFrame = 0;
+  private quickRestarts = 0;
+  touchedAssets = new Set<string>();
+  touchedClasses = new Set<string>();
   score = 0;
   health = START_HEALTH;
   private levelStartScore = 0;
@@ -467,6 +490,10 @@ export class Game {
   // Program
   private program: CompiledProgram | null = null;
   private paths: Record<string, PathDef> = {};
+  /** The running program's paths, by name. */
+  get pathDefs(): Readonly<Record<string, PathDef>> {
+    return this.paths;
+  }
   private handlers: Record<string, Handler[]> = {};
   private keyHandlers: { key: string; mode: 'pressed' | 'down'; fn: Handler }[] = [];
   private touchHandlers: TouchHandler[] = [];
@@ -552,6 +579,14 @@ export class Game {
     this.jumpHeight = 3;
     this.sounds = { ...DEFAULT_SOUNDS };
     this.finished = '';
+    this.restarts = 0;
+    this.happened = new Set();
+    this.ranBlocks = new Set();
+    this.touchedPairs = new Set();
+    this.variables = () => ({});
+    this.quickRestarts = 0;
+    this.touchedAssets = new Set();
+    this.touchedClasses = new Set();
     this.clearMessages();
     this.healthZeroFired = false;
     this.resetHandlers();
@@ -686,6 +721,7 @@ export class Game {
     this.keysPressed.clear();
     for (const h of this.touchHandlers) h.pairs.clear();
     this.levelStartScore = this.score;
+    this.levelLoadFrame = this.frame;
     try {
       this.loadLevelData(this.levels[this.levelIndex], this.program.levelSetup[this.levelIndex]);
     } catch (e) {
@@ -701,6 +737,21 @@ export class Game {
   }
 
   restartLevel(): void {
+    // A level that restarts as soon as it has started (say, "restart level" inside "when any level starts")
+    // would restart forever and look frozen: stop and say why instead. Only restarts after the level has
+    // played count as restarts (tutorial checks look at them).
+    this.quickRestarts = this.frame - this.levelLoadFrame <= 1 ? this.quickRestarts + 1 : 0;
+    if (!this.quickRestarts) this.restarts++;
+    if (this.quickRestarts >= 3) {
+      this.fail(
+        new Error(
+          'The level keeps restarting as soon as it starts, so nothing can move. Is “restart level” inside ' +
+            '“when any level starts” (or another event that runs right away)? Move it to an event like “when the ' +
+            'player touches …”.',
+        ),
+      );
+      return;
+    }
     this.score = this.levelStartScore;
     this.health = START_HEALTH;
     this.healthZeroFired = false;
@@ -954,6 +1005,7 @@ export class Game {
       }
     }
 
+    this.recordPlayerTouches();
     this.checkTouches();
     this.fire('tick');
     this.handleClicks();
@@ -969,6 +1021,33 @@ export class Game {
       const index = this.pendingLevel;
       this.pendingLevel = null;
       this.loadLevel(index);
+    }
+    this.callbacks.onFrame?.();
+  }
+
+  /**
+   * Remembers which sprites (by asset and class) the player has touched during this run, and in tutorials,
+   * every pair of sprites that touch.
+   */
+  private recordPlayerTouches(): void {
+    for (const p of this.sprites) {
+      if (!p.isPlayer || p.removed) continue;
+      for (const o of this.sprites) {
+        if (o === p || o.removed || !p.touches(o)) continue;
+        this.touchedAssets.add(o.asset.id);
+        this.touchedClasses.add(o.cls);
+      }
+    }
+    if (!this.trackTouches) return;
+    const live = this.sprites.filter((s) => !s.removed);
+    const names = (s: Sprite) => ['asset:' + s.asset.id, s.isPlayer ? 'player' : 'class:' + s.cls, 'any'];
+    for (let i = 0; i < live.length; i++) {
+      for (let j = i + 1; j < live.length; j++) {
+        const a = live[i];
+        const b = live[j];
+        if (!a.touches(b)) continue;
+        for (const x of names(a)) for (const y of names(b)) this.touchedPairs.add(x + '|' + y).add(y + '|' + x);
+      }
     }
   }
 
@@ -1371,6 +1450,21 @@ export class GameApi {
   on(event: 'start' | 'levelStart' | 'tick' | 'healthZero', fn: Handler): void {
     this.g.on(event, fn);
   }
+  /** Runs `fn` when the level with this id starts or restarts. */
+  /** The compiled program hands over a reader for its variables, so tutorial checks can see them. */
+  exposeVariables(fn: () => Record<string, unknown>): void {
+    this.g.variables = fn;
+  }
+  /** A block is about to run (tutorial runs only). */
+  ran(blockId: string): void {
+    this.g.ranBlocks.add(blockId);
+  }
+  onLevelStart(levelId: string, fn: Handler): void {
+    const g = this.g;
+    this.g.on('levelStart', function () {
+      if (g.levels[g.levelIndex]?.id === levelId) fn();
+    });
+  }
   onKey(key: string, mode: 'pressed' | 'down', fn: Handler): void {
     this.g.onKey(key, mode, fn);
   }
@@ -1465,6 +1559,7 @@ export class GameApi {
    * sprite, so rules can't bury sprites in walls or stack copies.
    */
   create(assetId: string, at: LocRef): Sprite[] {
+    this.g.happened.add('create');
     const made: Sprite[] = [];
     for (const l of this.locs(at)) {
       if (this.g.solidAt(l.x, l.y, false)) continue;
@@ -1475,6 +1570,7 @@ export class GameApi {
     return (this.created = made);
   }
   throwFrom(ref: SpriteRef, assetId: string, path: string): Sprite[] {
+    this.g.happened.add('throw');
     this.created = this.refs(ref)
       .map((s) => this.g.throwFrom(s, assetId, path))
       .filter((s): s is Sprite => !!s);
@@ -1484,6 +1580,7 @@ export class GameApi {
     return this.created.filter((s) => !s.removed);
   }
   remove(ref: SpriteRef): void {
+    this.g.happened.add('remove');
     this.refs(ref).forEach((s) => this.g.remove(s));
   }
 
@@ -1503,17 +1600,20 @@ export class GameApi {
     this.refs(ref).forEach((s) => (s.path = null));
   }
   setCostume(ref: SpriteRef, assetId: string): void {
+    this.g.happened.add('turn into');
     this.refs(ref).forEach((s) => this.g.setCostume(s, assetId));
   }
   moveTo(ref: SpriteRef, x: number, y: number): void {
     this.refs(ref).forEach((s) => this.g.moveTo(s, Math.floor(Number(x)), Math.floor(Number(y))));
   }
   moveToLocation(ref: SpriteRef, at: LocRef): void {
+    this.g.happened.add('move to');
     const l = this.locs(at)[0];
     if (l) this.moveTo(ref, l.x, l.y);
   }
   /** Makes the given character(s) the player; the previous player becomes an ordinary character. */
   makePlayer(ref: SpriteRef): void {
+    this.g.happened.add('make player');
     const next = this.refs(ref).filter((s) => s.cls === 'character');
     if (!next.length) return;
     for (const s of this.g.sprites) {
@@ -1522,16 +1622,19 @@ export class GameApi {
     }
   }
   setGravity(ref: SpriteRef, on: boolean): void {
+    this.g.happened.add('gravity');
     this.refs(ref).forEach((s) => (s.gravity = !!on));
   }
   setVisible(ref: SpriteRef, on: boolean): void {
     this.refs(ref).forEach((s) => (s.visible = !!on));
   }
   setSpeed(ref: SpriteRef, speed: number): void {
+    this.g.happened.add('path speed');
     this.refs(ref).forEach((s) => (s.speed = Math.max(0.25, Math.min(16, Number(speed) || 2))));
   }
   /** Platformer levels only: launches the sprite(s) upward about `height` spaces. */
   bounce(ref: SpriteRef, height = 1.5): void {
+    this.g.happened.add('bounce');
     if (this.g.mode !== 'platformer') return;
     this.refs(ref).forEach((s) => {
       s.vy = -jumpVelocity(Number(height) || 1.5);
@@ -1599,9 +1702,11 @@ export class GameApi {
 
   // Game flow
   nextLevel(): void {
+    this.g.happened.add('change level');
     this.g.requestLevel(this.g.levelIndex + 1);
   }
   gotoLevel(n: number): void {
+    this.g.happened.add('change level');
     const i = Math.floor(Number(n) || 1) - 1;
     if (i >= 0 && i < this.g.levels.length) this.g.requestLevel(i);
   }
@@ -1618,21 +1723,26 @@ export class GameApi {
     this.g.lose();
   }
   message(text: unknown): void {
+    this.g.happened.add('message');
     this.g.showMessage(String(text));
   }
   sound(id: string): void {
+    this.g.happened.add('sound');
     playSound(id);
   }
   setBackground(id: string): void {
+    this.g.happened.add('background');
     this.g.background = id;
   }
   setBuiltinSound(which: BuiltinSound, id: string): void {
     if (which in this.g.sounds) this.g.sounds[which] = String(id ?? '');
   }
   setPlayerSpeed(n: number): void {
+    this.g.happened.add('player speed');
     this.g.playerSpeed = Math.max(0.5, Math.min(12, Number(n) || 3.5));
   }
   setJumpHeight(n: number): void {
+    this.g.happened.add('jump height');
     this.g.jumpHeight = Math.max(0, Math.min(12, Number(n) || 3));
   }
 }

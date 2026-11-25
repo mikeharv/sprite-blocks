@@ -70,7 +70,7 @@ export function loadAutosave(): Project | null {
 export function validateProject(data: unknown): Project {
   const p = data as Project;
   if (!p || p.format !== 'sprite-blocks' || !Array.isArray(p.levels) || !p.levels.length) {
-    throw new Error('This file is not a Sprite Blocks project.');
+    throw new Error('This file is not a Sprite Paths project.');
   }
   p.sounds ??= [];
   const known = (id: string) => !!getAsset(id);

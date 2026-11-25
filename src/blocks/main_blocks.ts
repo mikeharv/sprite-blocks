@@ -43,10 +43,17 @@ export const MAIN_BLOCKS = [
   },
   {
     type: 'sb_when_level_starts',
-    message0: 'when a level starts %1 %2',
+    message0: 'when any level starts %1 %2',
     args0: [{ type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }],
     style: 'event_blocks',
     tooltip: 'Runs each time a level is loaded (including restarts).',
+  },
+  {
+    type: 'sb_when_level_named_starts',
+    message0: 'when level %1 starts %2 %3',
+    args0: [{ type: 'field_level', name: 'LEVEL' }, { type: 'input_dummy' }, { type: 'input_statement', name: 'DO' }],
+    style: 'event_blocks',
+    tooltip: 'Runs each time this level starts (and restarts).',
   },
   {
     type: 'sb_every_frame',
@@ -507,7 +514,7 @@ function registerExtensions(): void {
         root === this ||
         CONTEXT_PARENTS.includes(root.type) &&
           !(this.type === 'sb_other_sprite' && root.type === 'sb_when_clicked');
-      this.setWarningText(ok ? null : 'Use this block inside a “when … touches …” or “when … is clicked” event.');
+      this.setWarningText(ok ? null : Blockly.utils.string.wrap('Use this block inside a “when … touches …” or “when … is clicked” event.', 50));
     });
   });
 }
@@ -527,6 +534,8 @@ function eventBody(b: Blockly.Block, g: Gen): string {
 const generators: Record<string, (b: Blockly.Block, g: Gen) => string | [string, Order]> = {
   sb_when_game_starts: (b, g) => `$g.on('start', function () {\n${eventBody(b, g)}});\n`,
   sb_when_level_starts: (b, g) => `$g.on('levelStart', function () {\n${eventBody(b, g)}});\n`,
+  sb_when_level_named_starts: (b, g) =>
+    `$g.onLevelStart(${q(b.getFieldValue('LEVEL'))}, function () {\n${eventBody(b, g)}});\n`,
   sb_every_frame: (b, g) => `$g.on('tick', function () {\n${eventBody(b, g)}});\n`,
   sb_when_health_zero: (b, g) => `$g.on('healthZero', function () {\n${eventBody(b, g)}});\n`,
   sb_when_key: (b, g) =>

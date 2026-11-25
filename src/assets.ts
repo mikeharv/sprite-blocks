@@ -96,12 +96,15 @@ export const ASSETS: Asset[] = [
   sprite('hero', 'hero', 'character', ['hero'], { facing: 'right' }),
   sprite('knight', 'knight', 'character', ['knight'], { facing: 'right' }),
   sprite('wizard', 'wizard', 'character', ['wizard'], { facing: 'right' }),
+  sprite('ranger', 'ranger', 'character', ['ranger'], { facing: 'right' }),
+  sprite('villager', 'villager', 'character', ['villager'], { facing: 'right' }),
+  sprite('elder', 'elder', 'character', ['elder'], { facing: 'right' }),
   // Aliens
-  sprite('alien_green', 'green alien', 'character', anim('alien_green', 2), walker('left')),
-  sprite('alien_blue', 'blue alien', 'character', anim('alien_blue', 2), walker('left')),
-  sprite('alien_pink', 'pink alien', 'character', anim('alien_pink', 2), walker('left')),
-  sprite('alien_yellow', 'yellow alien', 'character', anim('alien_yellow', 2), walker('left')),
-  sprite('alien_beige', 'beige alien', 'character', anim('alien_beige', 2), walker('left')),
+  sprite('alien_green', 'green alien', 'character', anim('alien_green', 2), walker('right')),
+  sprite('alien_blue', 'blue alien', 'character', anim('alien_blue', 2), walker('right')),
+  sprite('alien_pink', 'pink alien', 'character', anim('alien_pink', 2), walker('right')),
+  sprite('alien_yellow', 'yellow alien', 'character', anim('alien_yellow', 2), walker('right')),
+  sprite('alien_beige', 'beige alien', 'character', anim('alien_beige', 2), walker('right')),
   // Animals
   sprite('sheep', 'sheep', 'character', ['sheep'], { facing: 'right' }),
   sprite('cow', 'cow', 'character', ['cow'], { facing: 'right' }),
@@ -110,9 +113,11 @@ export const ASSETS: Asset[] = [
   sprite('spider', 'spider', 'character', ['spider'], { turn: 'none' }),
   sprite('bat', 'bat', 'character', anim('bat', 3), floats),
   sprite('bat_dungeon', 'cave bat', 'character', ['bat_dungeon'], floats),
+  sprite('rat', 'rat', 'character', ['rat'], { facing: 'left' }),
   // Monsters
   sprite('jelly', 'jelly', 'character', anim('jelly', 2), walker('right')),
   sprite('ghost', 'ghost', 'character', ['ghost'], { facing: 'left', ...floats }),
+  sprite('spirit', 'spirit', 'character', ['spirit'], { facing: 'right', ...floats }),
   sprite('cyclops', 'cyclops', 'character', ['cyclops'], { facing: 'right' }),
   sprite('block_angry', 'angry block', 'character', anim('block_angry', 2), { turn: 'none' }),
   sprite('spikeball', 'spike ball', 'character', ['spikeball'], { turn: 'none', ...floats }),
@@ -133,6 +138,7 @@ export const ASSETS: Asset[] = [
   joined('fence_wood', 'fence top', 'platform', 'fence_wood', 'row', ROW),
   joined('cake_pink', 'pink cake', 'platform', 'cake_pink', 'row', ROW),
   joined('cake_choc', 'chocolate cake', 'platform', 'cake_choc', 'row', ROW),
+  sprite('girder', 'girder', 'platform', ['girder']),
 
   // Obstacles: solid on every side.
   // Joining textures: paint rows, columns or any shape and the pieces join up.
@@ -158,9 +164,14 @@ export const ASSETS: Asset[] = [
   sprite('barrel', 'barrel', 'obstacle', ['barrel']),
   sprite('chest', 'chest', 'obstacle', ['chest']),
   sprite('chest_open', 'open chest', 'obstacle', ['chest_open']),
+  sprite('crate_hazard', 'hazard crate', 'obstacle', ['crate_hazard']),
+  sprite('crate_blue', 'blue crate', 'obstacle', ['crate_blue']),
+  sprite('hay_bale', 'hay bale', 'obstacle', ['hay_bale']),
   // Outdoors
   sprite('hedge', 'hedge', 'obstacle', ['hedge']),
   sprite('rock', 'rock', 'obstacle', ['rock']),
+  sprite('roof_red', 'red roof', 'obstacle', ['roof_red']),
+  sprite('roof_blue', 'blue roof', 'obstacle', ['roof_blue']),
 
   // Items: things to collect, throw, avoid, reach or decorate with.
   // Treasure
@@ -171,6 +182,9 @@ export const ASSETS: Asset[] = [
   sprite('key', 'key', 'item', ['key']),
   sprite('potion', 'red potion', 'item', ['potion']),
   sprite('potion_blue', 'blue potion', 'item', ['potion_blue']),
+  sprite('potion_green', 'green potion', 'item', ['potion_green']),
+  sprite('sword', 'sword', 'item', ['sword']),
+  sprite('shield', 'shield', 'item', ['shield']),
   // Food
   sprite('donut', 'donut', 'item', ['donut']),
   sprite('ice_cream', 'ice cream', 'item', ['ice_cream']),
@@ -179,6 +193,21 @@ export const ASSETS: Asset[] = [
   sprite('tomato', 'tomato', 'item', ['tomato']),
   sprite('carrot', 'carrot', 'item', ['carrot']),
   sprite('pumpkin', 'pumpkin', 'item', ['pumpkin']),
+  sprite('turnip', 'turnip', 'item', ['turnip']),
+  sprite('cabbage', 'cabbage', 'item', ['cabbage']),
+  sprite('corn', 'corn', 'item', ['corn']),
+  sprite('wheat', 'wheat', 'item', ['wheat']),
+  sprite('egg', 'egg', 'item', ['egg']),
+  sprite('milk', 'milk bottle', 'item', ['milk']),
+  // Sweets
+  sprite('lollipop', 'lollipop', 'item', ['lollipop']),
+  sprite('gumball', 'gumball', 'item', ['gumball']),
+  sprite('cotton_candy', 'cotton candy', 'item', ['cotton_candy']),
+  sprite('candy_corn', 'candy corn', 'item', ['candy_corn']),
+  sprite('cookie', 'cookie', 'item', ['cookie']),
+  sprite('cocoa', 'hot cocoa', 'item', ['cocoa']),
+  sprite('burger', 'burger', 'item', ['burger']),
+  sprite('candle', 'birthday candle', 'item', ['candle']),
   // Flowers
   sprite('sunflower', 'sunflower', 'item', ['sunflower']),
   sprite('flowers_red', 'red flowers', 'item', ['flowers_red']),
@@ -190,6 +219,7 @@ export const ASSETS: Asset[] = [
   // Traps
   sprite('spikes', 'spikes', 'item', ['spikes']),
   joined('water', 'water', 'item', 'water', 'column', COLUMN),
+  joined('slime', 'toxic slime', 'item', 'slime', 'column', COLUMN),
   sprite('trap', 'floor trap', 'item', ['trap']),
   sprite('spring', 'spring', 'item', ['spring']),
   // Doors and goals
@@ -197,9 +227,14 @@ export const ASSETS: Asset[] = [
   sprite('door_open', 'open door', 'item', ['door_open'], back),
   sprite('door_wood', 'wooden door', 'item', ['door_wood'], back),
   sprite('flag', 'flag', 'item', anim('flag', 2), back),
+  sprite('stairs', 'stairs', 'item', ['stairs'], back),
+  sprite('pipe', 'pipe', 'item', ['pipe'], back),
   // Plants
   sprite('tree', 'tree', 'item', ['tree'], back),
   sprite('tree_round', 'small tree', 'item', ['tree_round'], back),
+  sprite('pine', 'pine tree', 'item', ['pine'], back),
+  sprite('tree_autumn', 'autumn tree', 'item', ['tree_autumn'], back),
+  sprite('apple_bush', 'apple bush', 'item', ['apple_bush'], back),
   sprite('cactus', 'cactus', 'item', ['cactus'], back),
   joined('plant', 'vine', 'item', 'plant', 'column', COLUMN, back),
   sprite('sprout', 'sprout', 'item', ['sprout'], back),
@@ -211,6 +246,21 @@ export const ASSETS: Asset[] = [
   joined('ladder', 'ladder', 'item', 'ladder', 'column', COLUMN, back),
   sprite('beehive', 'beehive', 'item', ['beehive'], back),
   sprite('snowman', 'snowman', 'item', ['snowman'], back),
+  sprite('signpost', 'signpost', 'item', ['signpost'], back),
+  sprite('well', 'well', 'item', ['well'], back),
+  sprite('wheelbarrow', 'wheelbarrow', 'item', ['wheelbarrow'], back),
+  sprite('log', 'log', 'item', ['log'], back),
+  sprite('target', 'target', 'item', ['target'], back),
+  sprite('stepping_stones', 'stepping stones', 'item', ['stepping_stones'], back),
+  sprite('bucket', 'bucket', 'item', ['bucket'], back),
+  sprite('veg_crate', 'vegetable crate', 'item', ['veg_crate'], back),
+  sprite('watering_can', 'watering can', 'item', ['watering_can'], back),
+  sprite('torch', 'wall torch', 'item', ['torch'], back),
+  sprite('siren_red', 'red siren', 'item', ['siren_red'], back),
+  sprite('siren_blue', 'blue siren', 'item', ['siren_blue'], back),
+  sprite('warning_sign', 'warning sign', 'item', ['warning_sign'], back),
+  sprite('exit_sign', 'exit sign', 'item', ['exit_sign'], back),
+  sprite('crane_hook', 'crane hook', 'item', ['crane_hook'], back),
 
   // Scenic skies: a sky, a horizon strip that scrolls slower than the level, and ground below.
   scenic('bg_sky', 'sky with trees', 'bg_0000', ['bg_0008', 'bg_0009'], 'bg_0016', '#dcf3f1'),
@@ -220,6 +270,8 @@ export const ASSETS: Asset[] = [
   scenic('bg_desert', 'desert', 'bg_0004', ['bg_0012', 'bg_0013'], 'bg_0020', '#f7c87e'),
   scenic('bg_sunset', 'sunset', 'bg_0000', ['bg_0008', 'bg_0009'], 'bg_0016', '#f6b9a0', '#ffb08a'),
   scenic('bg_night', 'night', 'bg_0000', ['bg_0010', 'bg_0011'], 'bg_0016', '#3b4378', '#4a55a0'),
+  scenic('bg_factory', 'factory dusk', 'bg_0004', ['bg_0012', 'bg_0013'], 'bg_0020', '#f0b2b6', '#f4a6b6'),
+  scenic('bg_candy', 'candy clouds', 'bg_0000', ['bg_0008', 'bg_0010'], 'bg_0016', '#ffd6ea', '#ffc4e1'),
   // Floors: one tile repeated across the whole level.
   tiled('bg_floor_grass', 'grass', 'floor_grass', '#8fd16a'),
   tiled('bg_floor_meadow', 'flower meadow', 'floor_meadow', '#8fd16a'),
@@ -229,6 +281,9 @@ export const ASSETS: Asset[] = [
   tiled('bg_floor_stone', 'stone floor', 'floor_stone', '#9aa3b5'),
   tiled('bg_floor_tiles', 'sand tiles', 'floor_tiles', '#e6b26a'),
   tiled('bg_floor_marble', 'marble tiles', 'floor_marble', '#d9dde6'),
+  tiled('bg_floor_path', 'dirt path', 'floor_path', '#e2b679'),
+  tiled('bg_floor_field', 'farm field', 'floor_field', '#8fd16a'),
+  tiled('bg_floor_dungeon', 'dungeon sand', 'floor_dungeon', '#e6b26a'),
 ];
 
 export interface SoundInfo {

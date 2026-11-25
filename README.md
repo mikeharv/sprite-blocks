@@ -1,4 +1,4 @@
-# Sprite Blocks
+# Sprite Paths
 
 A block-based game maker for grid-based platformers and top-down games. It is built on the latest
 [Blockly](https://github.com/RaspberryPiFoundation/blockly) and [p5.js](https://p5js.org/), with a small
@@ -36,9 +36,78 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
 | Game runtime (p5.js sketch, physics, paths, events, HUD) | `src/runtime/engine.ts` |
 | Level editor, asset library, dialogs | `src/ui/` |
 | Save, open, import and export | `src/storage.ts` |
+| Start page | `src/ui/landing.ts` |
+| Tutorials: content, progress, checks and the step controller | `src/tutorial/` |
+
+### Learning paths
+
+The tutorials are presented as paths through what there is to learn. Each one's `start` and `after` fields record
+where it sits; the start page draws the same map, with arrows.
+
+```mermaid
+flowchart TD
+  subgraph start["Start here: pick one"]
+    TD[Top-Down Game]
+    PF[Platformer Game]
+  end
+  start --> MB[More Blocks]
+  start --> PA[Paths]
+  MB --> VA[Variables]
+  MB --> BG[Bigger Games]
+  VA --> LL[Loops and Logic]
+  PA --> LL
+```
+
+What each path teaches, and what it expects the learner to know already (an audit of every step's
+instructions, starting blocks and toolbox):
+
+| Path | Game | Teaches | Assumes, and where it's taught |
+| --- | --- | --- | --- |
+| Top-Down Game | Farm girl in a hedge maze | Running a game; "when the player touches …"; win; remove other sprite; play sound; "when any level starts" with the ready-made paths; restart level; painting on the Level tab and ☆ the player | Nothing beyond using a mouse and arrow keys |
+| Platformer Game | Alien on planks | The same, as a jumping game | Nothing |
+| More Blocks | Robot factory | "When game starts"; jump height and player speed; bounce; show message; turn into; move to a place (picking a square); make another sprite the player; set background | Touch rules, win, remove other sprite and sounds (a first path) |
+| Paths | Busy village | The Paths tab: path blocks, naming a path, moves, speed, wait, move toward, giving a sprite your own path | "When any level starts" with "set path", touch rules, restart level, painting a character (a first path) |
+| Variables | Harvest day on a farm | Score and health; "when health reaches 0"; join; editing numbers in blocks; Create variable; set, change and get a variable | Touch rules, remove other sprite, restart level, sounds (a first path); **show message** (More Blocks) |
+| Bigger Games | Dungeon quest | The full level editor: width, + Level, backgrounds; go to next level; "when level … starts"; go to level | Painting and ☆ the player, "set path", touch rules, restart level (a first path); **show message**, and reading a **turn into** rule (More Blocks) |
+| Loops and Logic | Sweet factory | Repeat; create at a random place; if … else; "is above"; compare; and; number of sprites; while; can move | Score (Variables); making a path on the Paths tab (Paths); **bounce** and **show message** (More Blocks, through Variables) |
+
+The audit's gaps decided the arrows: Variables and Bigger Games use "show message" without teaching it, so they
+come after More Blocks; Loops and Logic leans on score, your own paths and bounce, so it comes after Variables
+and Paths. More Blocks and Paths only need what both first paths teach, so either first path leads to them.
 
 ### Program flow
 
+* **Start page and routes:** `#/` is the start page: a map of the tutorial paths (a "Start here" group with the
+  two first paths, arrows to the paths that build on them, green once a path is finished, and "Up next" on a path
+  whose prerequisites are all finished), then free play. On a narrow page the cards stack and each says what it
+  builds on. `#/play` is the full
+  editor and `#/tutorial/<id>` (optionally `/<step>`) runs a tutorial. Changing route reloads the page, because
+  the editor is set up differently in a tutorial.
+* **Tutorials** ("paths" on the start page; `src/tutorial/content.ts` lists them, each is a file in
+  `src/tutorial/tutorials/`) each build one game over a few steps. See [Learning paths](#learning-paths) for what
+  each teaches and builds on.
+
+  A step has instructions (shown above the game), the sprites and sounds to use, its levels, starting Rules and
+  Paths blocks, a cut-down toolbox (a plain flyout of blocks taken from the full toolboxes, which can include the
+  "Create variable…" button), which tabs to show (and, for the Level tab, whether to show the level list and
+  settings), checks, and a solution. `src/tutorial/build.ts` has helpers for writing them: Blockly JSON for blocks
+  and checks, ready-made toolbox entries, and levels drawn from rows of characters. The checks are validation
+  blocks: criteria with a description, each passing once its condition comes true while the game runs. Conditions
+  include "there is a player", "the player has touched …", "number of … sprites", "the game is won", "a level has
+  restarted", "… sprites have a path", "… sprites follow path …", a game value (score, health, jump height, level
+  number, number of levels, level size, number of paths), a variable by name, "… happened" (a sound, message,
+  bounce, level change and so on, recorded by the engine) and "your blocks run …" (a kind of block that has
+  actually run: in tutorial runs the generated code reports each block's id just before it runs, a value block
+  counts once the block it's plugged into runs, and an event or path once a block inside it runs; the generated
+  code view leaves these reports out), combined with the usual and/or/not and compare blocks. They are compiled to code (also shown in
+  the generated code view) and tested every frame. The 💡 button shows them read-only. A step passes once every
+  check has come true in one run; later steps open once the steps before them have passed. A step's solution is
+  one way to pass it, kept for testing that every step can be passed. Each step's project and pass state are kept
+  in `localStorage` (`spriteblocks:tutorial:<id>`) and can be exported and imported. Finishing a tutorial offers
+  to keep building the game in the full editor (a one-way copy; the game open there before is saved first).
+* **Level editor tours:** the first time a tutorial opens the Level tab, a tour walks through it: a short one for
+  the simplified editor, or one covering the level list, + Level, size, camera and background when the step shows
+  every control. **Show me how** in the level editor's footer replays the tour that fits.
 * **Getting started:** first-time visitors and new blank games are offered a short guided tour of the tabs. The
   **Tour** button in the header replays it. A blank game starts with no sprites or sounds. **New** also offers two
   examples: Coin Run (platformer) and Garden Gem Hunt (top-down).
@@ -48,10 +117,18 @@ Pages through `.github/workflows/deploy.yml`. In the repository settings, set **
   slowly than the level, some tinted for sunset or night), a floor (one tile repeated across the level) or a
   plain colour. It also has a size, a camera size and a starred player. When a game runs, each level becomes hidden setup code
   (`$g.setupLevel(...)` and one `$g.spawn(...)` per sprite). The `{ }` button shows this code next to the code
-  generated from your blocks. Anything outside the level is drawn dark.
+  generated from your blocks. Anything outside the level is drawn dark. The **Select and move** tool (in Tools,
+  with the eraser) marks an area by dragging; dragging inside it moves those sprites, replacing the sprites they
+  land on. While dragging, the selected sprites fade where they are (outlined), the moving sprites are tinted blue,
+  and spaces that will lose their sprites are tinted red. With "Move empty spaces too", the empty spaces in the selection clear what they land
+  on as well. The selection clears after a move, on Escape, or when another tool or sprite is picked. Each
+  level has its own undo history (Undo and Redo above the tools, or Ctrl/⌘+Z and Ctrl/⌘+Shift+Z): a paint stroke,
+  a move, a player change or a settings change is one step.
 * **Rules** (main workspace) blocks are standard Blockly JSON definitions. Event blocks register handlers, and every
   action finishes within one frame. Blocks that are not inside an event are disabled. Locations are blocks too:
   a grid location (the default shadow), the location of a sprite, or a number of spaces from a sprite.
+  "when any level starts" runs for every level; "when level … starts" runs for one level, chosen by id, so the
+  block follows renames and warns if its level is deleted.
 * **Paths** live on their own tab with a categorized toolbox (Paths, Actions, Sensing, Loops, Logic, Math, Variables, Functions). Each path definition compiles to a JavaScript generator
   function that the engine steps once per frame. `move left 3 spaces` moves one grid space at a time. It stops early
   at obstacles and, if the path says "stay on", at platform edges. `move forward` follows the way the sprite faces.
