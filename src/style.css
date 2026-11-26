@@ -147,6 +147,36 @@ body {
   box-shadow: 0 0 0 1px var(--border);
 }
 .game:focus-visible, .game:focus { box-shadow: 0 0 0 3px var(--accent); }
+
+/* Touch controls, in a bar under the game: arrows on the left, jump and rule keys on the right. */
+.touch-controls {
+  --tc: 62px;
+  flex: none; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 2px 4px;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.touch-controls[hidden] { display: none; }
+.touch-pad { display: grid; grid-template: repeat(2, var(--tc)) / repeat(3, var(--tc)); gap: 4px; }
+.touch-pad .arrow-up { grid-area: 1 / 2; }
+.touch-pad .arrow-left { grid-area: 2 / 1; }
+.touch-pad .arrow-down { grid-area: 2 / 2; }
+.touch-pad .arrow-right { grid-area: 2 / 3; }
+.touch-actions.row { display: flex; align-items: flex-end; gap: 10px; }
+/* Four or five buttons: a diamond (plus the middle), like a game controller's. */
+.touch-actions.diamond { display: grid; grid-template: repeat(3, var(--tc)) / repeat(3, var(--tc)); gap: 4px; }
+.touch-actions.diamond .touch-btn { width: var(--tc); height: var(--tc); font-size: calc(var(--tc) * 0.3); }
+.touch-actions .at-top { grid-area: 1 / 2; }
+.touch-actions .at-left { grid-area: 2 / 1; }
+.touch-actions .at-right { grid-area: 2 / 3; }
+.touch-actions .at-bottom { grid-area: 3 / 2; }
+.touch-actions .at-middle { grid-area: 2 / 2; }
+.touch-btn {
+  pointer-events: auto; touch-action: none; width: var(--tc); height: var(--tc); padding: 0;
+  display: grid; place-items: center; border-radius: 12px; border: 2px solid #3a4862;
+  background: #2a3750; color: #fff; font: 700 calc(var(--tc) * 0.36) / 1 inherit; cursor: pointer;
+}
+.touch-btn.held { background: #3f8fd6; border-color: #3f8fd6; }
+.touch-btn.extra { border-radius: 50%; font-size: calc(var(--tc) * 0.3); }
+.touch-btn.jump { width: calc(var(--tc) * 1.5); height: calc(var(--tc) * 1.5); border-radius: 50%; font-size: calc(var(--tc) * 0.34); }
 .game canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: pixelated; }
 .game-help { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .game-error {
@@ -157,7 +187,11 @@ body {
 .app.expanded .editor-pane { display: none; }
 .app.expanded .game-pane { flex: 1; width: auto; align-items: center; }
 .app.expanded .game-toolbar { width: 100%; }
-.app.expanded .game { width: min(100%, calc((100vh - var(--header-h) - 110px) * 16 / 9)); }
+.app.expanded .game { width: min(100%, calc((100vh - var(--header-h) - 110px - var(--touch-h, 0px)) * 16 / 9)); }
+/* Playing with touch controls: make room for their bar (its height is set as --touch-h; full width, so thumbs reach the buttons), and leave the instructions
+   for after (Stop brings back the editor and the checks). */
+.app.expanded .touch-controls { align-self: stretch; }
+body.touch-playing .app.expanded .tutorial-panel { display: none; }
 
 /* ---------------------------------------------------------------- level editor */
 
@@ -473,10 +507,13 @@ body[data-mode='tutorial'] #save-state { display: none; }
 .landing-progress { font-size: 13px; font-weight: 600; color: var(--muted); }
 .progress-track { height: 6px; border-radius: 3px; background: #e6eaf2; overflow: hidden; }
 .progress-fill { display: block; height: 100%; background: #2fa37f; }
-/* The path map: the first paths in a "Start here" group, the rest placed so the arrows between them don't cross. */
+/*
+ * The path map, two columns: the first paths in a "Start here" group, then a row per stage. Narrower than the
+ * page, so an arrow can arc around the outside of a card in its way.
+ */
 .path-map {
-  position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px 48px;
-  grid-template-areas: 'start start start' 'more . paths' 'bigger vars .' '. logic .';
+  position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px 64px;
+  grid-template-areas: 'start start' 'more paths' 'bigger vars' '. logic'; max-width: 760px; margin: 0 auto;
 }
 .path-map > .landing-card, .path-start { position: relative; z-index: 1; }
 .path-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
@@ -486,13 +523,13 @@ body[data-mode='tutorial'] #save-state { display: none; }
 .path-arrowhead.todo { fill: #a9b3c6; }
 .path-arrowhead.done { fill: #2fa37f; }
 .path-start {
-  grid-area: start; justify-self: center; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px;
+  grid-area: start; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px;
   border: 2px dashed #f0b400; border-radius: 18px; background: #fffbea;
 }
 .path-start-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .path-start-note { color: var(--muted); font-size: 14px; }
 .path-start-cards { display: flex; align-items: center; gap: 14px; }
-.path-start-cards > .landing-card { width: 290px; }
+.path-start-cards > .landing-card { flex: 1; min-width: 0; }
 .path-or { font-weight: 700; color: var(--muted); }
 .path-badge {
   align-self: flex-start; font-size: 12px; font-weight: 800; letter-spacing: 0.02em; border-radius: 999px;
@@ -510,7 +547,7 @@ body[data-mode='tutorial'] #save-state { display: none; }
   .path-links { display: none; }
   .path-start { align-self: stretch; }
   .path-start-cards { flex-direction: column; align-items: stretch; }
-  .path-start-cards > .landing-card { width: auto; }
+  .path-start-cards > .landing-card { flex: none; }
 }
 .landing-hero .free-card { margin-top: 16px; }
 .free-card { flex-direction: row; align-items: center; gap: 14px; padding-right: 16px; }

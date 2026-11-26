@@ -507,6 +507,8 @@ export class Game {
   private keysPressed = new Set<string>();
   private clicks: { x: number; y: number }[] = [];
   focused = false;
+  /** On-screen touch controls are showing: the "click the game to use the keyboard" hint isn't needed. */
+  touchControls = false;
 
   private preview: Level | null = null;
 
@@ -768,6 +770,23 @@ export class Game {
     this.finished = 'lost';
     this.showMessage('Game over', 0);
     this.playBuiltin('gameOver');
+  }
+
+  /** Holds a key down, as if pressed on the keyboard (for touch controls). */
+  pressKey(key: string): void {
+    if (!this.running) return;
+    if (!this.keysDown.has(key)) this.keysPressed.add(key);
+    this.keysDown.add(key);
+  }
+
+  /** Lets go of a key held with `pressKey`. */
+  releaseKey(key: string): void {
+    this.keysDown.delete(key);
+  }
+
+  /** The game type of the level being played. */
+  get levelMode(): GameMode | undefined {
+    return this.levels[this.levelIndex]?.mode;
   }
 
   playBuiltin(which: BuiltinSound, volume?: number): void {
@@ -1409,7 +1428,7 @@ export class Game {
       p.fill(255);
       p.text(this.message, CANVAS_W / 2, CANVAS_H / 2);
     }
-    if (this.running && !this.focused && !this.finished) {
+    if (this.running && !this.focused && !this.finished && !this.touchControls) {
       p.textAlign(p.CENTER, p.BOTTOM);
       p.textSize(18);
       p.fill(0, 140);

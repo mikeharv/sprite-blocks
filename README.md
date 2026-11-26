@@ -115,6 +115,12 @@ and Paths. More Blocks and Paths only need what both first paths teach, so eithe
   Android tablets and other touch-first screens) start the workspace a little zoomed out, and the zoom follows the
   window across that width unless the learner has zoomed. In a tutorial, Start over and Export and Import progress
   share a Progress menu so the bar fits.
+* **Touch controls** (`src/ui/touchControls.ts`): on phones and tablets (or once a touchscreen is touched), Run
+  opens the full-size game and Stop goes back to the blocks. A bar under the game has arrows on the left (an
+  upside-down T) and, on the right, buttons for keys the learner's "when … key" rules use: up to three beside Jump
+  on platformer levels, or four on top-down ones (arrows, and Space on platformer levels, are already covered).
+  Two or three buttons sit in a row; four or five make a diamond, with Jump at the bottom. The buttons
+  hold keys down through `Game.pressKey`/`releaseKey`, and several can be held at once.
 * **Getting started:** first-time visitors and new blank games are offered a short guided tour of the tabs. The
   **Tour** button in the header replays it. A blank game starts with no sprites or sounds. **New** also offers two
   examples: Coin Run (platformer) and Garden Gem Hunt (top-down).

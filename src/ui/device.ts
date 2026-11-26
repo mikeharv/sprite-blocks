@@ -10,3 +10,8 @@ export function isTablet(): boolean {
   if (/Android/.test(ua) && !/Mobile/.test(ua)) return true;
   return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) >= 600;
 }
+
+/** True on a touch-first device (a phone or tablet), where the game needs on-screen controls. */
+export function hasTouch(): boolean {
+  return navigator.maxTouchPoints > 0 && (matchMedia('(pointer: coarse)').matches || isTablet());
+}

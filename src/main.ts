@@ -32,6 +32,7 @@ import {
 import { LevelEditor } from './ui/levelEditor';
 import { levelTour, startTour } from './ui/tour';
 import { isTablet } from './ui/device';
+import { TouchControls } from './ui/touchControls';
 import { AssetLibrary } from './ui/library';
 import { confirmDialog, el, openModal, toast } from './ui/modal';
 import {
@@ -101,11 +102,25 @@ const game = new Game($('game'), {
     runBtn.textContent = running ? '↻ Restart' : '▶ Run';
     stopBtn.disabled = !running;
     if (!running) game.showPreview(state.level);
+    // Touch devices play full size, with the controls underneath; stopping goes back to the blocks.
+    if (running && touch.enabled && !app.classList.contains('expanded')) {
+      $('btn-expand').click();
+      autoExpanded = true;
+    } else if (!running && autoExpanded) {
+      autoExpanded = false;
+      if (app.classList.contains('expanded')) $('btn-expand').click();
+    }
+    touch.update();
   },
   onFrame() {
     session?.onFrame();
+    touch.update();
   },
 });
+// On touch devices: arrows, jump and the keys the learner's rules use, over the game.
+const touch = new TouchControls(game, $('game'));
+/** Whether Run opened the full-size game (on touch devices), so Stop can close it again. */
+let autoExpanded = false;
 let session: TutorialSession | null = null;
 /** Autosave goes to the tutorial's progress in a tutorial, and to the free-play autosave otherwise. */
 const persist = (project: Project) => (session ? session.save(project) : autosave(project));
@@ -124,6 +139,7 @@ function run(): void {
   errorBox.hidden = true;
   syncProjectFromWorkspaces();
   try {
+    touch.setRules(state.project.main);
     game.start(compileProject(state.project, !!session));
     session?.onRunStart();
   } catch (e) {
@@ -136,6 +152,8 @@ runBtn.addEventListener('click', run);
 stopBtn.addEventListener('click', () => game.stop());
 $('btn-expand').addEventListener('click', () => {
   const expanded = app.classList.toggle('expanded');
+  // Shrinking by hand keeps the editor after the game stops too.
+  if (!expanded) autoExpanded = false;
   $('btn-expand').textContent = expanded ? '⤡' : '⤢';
   $('btn-expand').title = expanded ? 'Shrink game' : 'Expand game';
   requestAnimationFrame(resizeWorkspaces);

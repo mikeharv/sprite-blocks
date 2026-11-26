@@ -8,11 +8,17 @@ import { confirmDialog, el } from './modal';
 
 const asset = (path: string) => import.meta.env.BASE_URL + 'assets/' + path;
 const SVG = 'http://www.w3.org/2000/svg';
+/** Length of an arrowhead, in pixels. Lines stop this far short of a card, where the head's back edge sits. */
+const HEAD = 14;
+/** Distance between the dots of a trail not yet walked (matches `.path-link.todo` in style.css). */
+const DOT_SPACING = 9.1;
+/** Every trail ends with a short straight run, so it meets the arrowhead head-on. */
+const LEAD_IN = 12;
 
 /**
- * Where each path sits on the map (a grid area; see `.path-map` in style.css). The layout keeps the arrows from
- * crossing cards: More Blocks leads down to Bigger Games and Variables, and Variables and Paths both lead down to
- * Loops and Logic, alone on the bottom row. A path missing here goes at the end.
+ * Where each path sits on the map (a grid area; see `.path-map` in style.css): two columns, a row per stage.
+ * More Blocks leads down to Bigger Games and Variables; Variables leads down to Loops and Logic, and Paths arcs
+ * around Variables to reach it. A path missing here goes at the end.
  */
 const MAP_AREAS: Record<string, string> = {
   'more-blocks': 'more',
@@ -136,7 +142,7 @@ export function showLanding(root: HTMLElement): void {
         el('h1', { textContent: 'Make your own game' }),
         el('p', { textContent: 'Paint levels, send sprites along paths, and write the rules with blocks.' }),
         el('a', { className: 'landing-card free-card', href: '#/play' }, [
-          el('div', { className: 'free-icon', textContent: '🧱' }),
+          el('div', { className: 'free-icon', textContent: '🎮', ariaHidden: 'true' }),
           el('div', { className: 'landing-card-body' }, [
             el('h3', { textContent: 'Open the game maker' }),
             el('p', {
@@ -190,11 +196,13 @@ function drawLinks(map: HTMLElement, svg: SVGSVGElement, finished: (id: string) 
   for (const kind of ['todo', 'done']) {
     const marker = document.createElementNS(SVG, 'marker');
     marker.id = `path-arrow-${kind}`;
+    // Anchored at the middle of its back edge: the line ends there, and the point reaches the card.
     marker.setAttribute('viewBox', '0 0 10 10');
-    marker.setAttribute('refX', '8');
+    marker.setAttribute('refX', '0');
     marker.setAttribute('refY', '5');
-    marker.setAttribute('markerWidth', '7');
-    marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', String(HEAD));
+    marker.setAttribute('markerHeight', String(HEAD));
     marker.setAttribute('orient', 'auto-start-reverse');
     const head = document.createElementNS(SVG, 'path');
     head.setAttribute('d', 'M0 0L10 5L0 10Z');
@@ -204,31 +212,58 @@ function drawLinks(map: HTMLElement, svg: SVGSVGElement, finished: (id: string) 
   }
   svg.append(defs);
 
+  // Every card and the start group: an arrow that would run straight through one arcs around it instead.
+  const boxes = [...map.querySelectorAll<HTMLElement>(':scope > [data-path]')].map((n) => ({ id: n.dataset.path!, ...box(n.dataset.path!)! }));
+  const blocked = (x1: number, x2: number, y1: number, y2: number, skip: string[]) =>
+    boxes.some((b) => !skip.includes(b.id) && b.l < Math.max(x1, x2) + 4 && b.r > Math.min(x1, x2) - 4 && b.t < y2 && b.b > y1);
+
   for (const t of TUTORIALS) {
     const to = box(t.id);
     if (!to) continue;
-    const after = t.after ?? [];
-    after.forEach((from, i) => {
+    const gap = 6;
+    // How each arrow arrives: from above (side by side if several), from beside, or arcing around a card.
+    const routes = (t.after ?? []).flatMap((from) => {
       const a = box(from);
-      if (!a) return;
-      // Arrows arriving at the same card land side by side.
-      const spread = (i - (after.length - 1) / 2) * 44;
-      const gap = 6;
+      if (!a) return [];
+      const below = to.t >= a.b;
+      const tx = (to.l + to.r) / 2;
+      const sx = Math.max(a.l + 24, Math.min(a.r - 24, tx));
+      const kind = !below ? ('beside' as const) : blocked(sx, tx, a.b, to.t, [from, t.id]) ? ('arc' as const) : ('above' as const);
+      return [{ from, a, kind }];
+    });
+    const fromAbove = routes.filter((r) => r.kind === 'above');
+    routes.forEach(({ from, a, kind: route }) => {
       let d: string;
-      if (to.t >= a.b) {
+      if (route === 'above') {
         // Below: leave the bottom (under the target, if the source is wide) and arrive at the top.
+        const spread = (fromAbove.findIndex((r) => r.from === from) - (fromAbove.length - 1) / 2) * 44;
         const tx = (to.l + to.r) / 2 + spread;
         const sx = Math.max(a.l + 24, Math.min(a.r - 24, tx));
         const sy = a.b + gap;
-        const ty = to.t - gap;
-        const bend = (ty - sy) / 2;
-        d = `M${sx} ${sy}C${sx} ${sy + bend} ${tx} ${ty - bend} ${tx} ${ty}`;
+        const ty = to.t - gap - HEAD;
+        const by = ty - LEAD_IN;
+        const bend = (by - sy) / 2;
+        d = `M${sx} ${sy}C${sx} ${sy + bend} ${tx} ${by - bend} ${tx} ${by}L${tx} ${ty}`;
+      } else if (route === 'arc') {
+        // A card is in the way: swing out past the outer edge (right for the right column) and come back in.
+        const right = to.r > origin.width / 2;
+        const side = (b: { l: number; r: number }) => (right ? b.r + gap : b.l - gap);
+        const sx = side(a);
+        const tx = side(to) + (right ? HEAD : -HEAD);
+        const sy = (a.t + a.b) / 2;
+        const ty = (to.t + to.b) / 2;
+        // A curve swings out about three quarters of its handles' reach: keep it on screen in a narrow window.
+        const page = (map.closest('#landing') as HTMLElement | null)?.clientWidth ?? window.innerWidth;
+        const room = right ? page - (origin.left + tx) - 6 : origin.left + tx - 6;
+        const out = (right ? 1 : -1) * Math.max(24, Math.min(64, room / 0.75));
+        const bx = tx + (right ? LEAD_IN : -LEAD_IN);
+        d = `M${sx} ${sy}C${sx + out} ${sy} ${bx + out} ${ty} ${bx} ${ty}L${tx} ${ty}`;
       } else {
         // Beside: from the facing side, at the middle of where the two overlap up and down.
         const right = to.l >= a.r;
         const y = (Math.max(a.t, to.t) + Math.min(a.b, to.b)) / 2;
         const sx = right ? a.r + gap : a.l - gap;
-        const tx = right ? to.l - gap : to.r + gap;
+        const tx = right ? to.l - gap - HEAD : to.r + gap + HEAD;
         d = `M${sx} ${y}L${tx} ${y}`;
       }
       const kind = finished(from) ? 'done' : 'todo';
@@ -237,6 +272,13 @@ function drawLinks(map: HTMLElement, svg: SVGSVGElement, finished: (id: string) 
       line.classList.add('path-link', kind);
       line.setAttribute('marker-end', `url(#path-arrow-${kind})`);
       svg.append(line);
+      // Dotted trails: a whole number of dot spacings, so a dot sits at each end (one right at the arrowhead).
+      if (kind === 'todo') {
+        const dots = Math.max(1, Math.round(line.getTotalLength() / DOT_SPACING));
+        line.setAttribute('pathLength', String(dots * DOT_SPACING));
+        // A dot exactly at the end isn't drawn: nudge them all back a hair, so the last lands just inside.
+        line.style.strokeDashoffset = '0.1';
+      }
     });
   }
 }
