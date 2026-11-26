@@ -108,9 +108,13 @@ and Paths. More Blocks and Paths only need what both first paths teach, so eithe
 * **Level editor tours:** the first time a tutorial opens the Level tab, a tour walks through it: a short one for
   the simplified editor, or one covering the level list, + Level, size, camera and background when the step shows
   every control. **Show me how** in the level editor's footer replays the tour that fits.
-* **Tablets** (`src/ui/device.ts`: iPads, Android tablets and other touch-first screens) get a smaller game and
-  instructions and a slightly zoomed-out workspace, so the blocks have room. Upright, the blocks fill the top and
-  the game and instructions sit side by side underneath.
+* **Screen sizes:** the game column narrows with the window (300–440px) so the blocks keep most of the room. In
+  upright windows (and upright tablets) or ones 700px wide or less, the blocks fill the top, with the run buttons
+  across the middle and the game and instructions side by side underneath; wide-but-short windows keep the game
+  beside the blocks. Phones stack everything and scroll. Narrow windows and tablets (`src/ui/device.ts`: iPads,
+  Android tablets and other touch-first screens) start the workspace a little zoomed out, and the zoom follows the
+  window across that width unless the learner has zoomed. In a tutorial, Start over and Export and Import progress
+  share a Progress menu so the bar fits.
 * **Getting started:** first-time visitors and new blank games are offered a short guided tour of the tabs. The
   **Tour** button in the header replays it. A blank game starts with no sprites or sounds. **New** also offers two
   examples: Coin Run (platformer) and Garden Gem Hunt (top-down).

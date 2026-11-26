@@ -9,7 +9,8 @@
   --danger: #c8443b;
   --run: #2fa37f;
   --header-h: 52px;
-  --game-w: 440px;
+  /* The game column gives way as the window narrows, so the blocks keep most of the room. */
+  --game-w: clamp(300px, 32vw, 440px);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -27,7 +28,8 @@ body {
 }
 
 .sr-only {
-  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+  /* Pinned to the top so a hidden label can never make the page taller (and scroll). */
+  position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
 }
 
 .spacer { flex: 1; }
@@ -128,12 +130,14 @@ body {
 .game-pane {
   width: var(--game-w);
   flex: none;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .game-toolbar { display: flex; gap: 6px; align-items: center; }
 .game {
+  flex: none;
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #20242c;
@@ -321,30 +325,39 @@ body {
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 
-@media (max-width: 900px) {
+/*
+ * Upright windows (and upright tablets), or very narrow ones: the blocks fill the top, with the run buttons across
+ * the middle and the game and the instructions side by side underneath. Wide-but-short windows keep the game
+ * beside the blocks, which leaves the blocks more room. Phones stack everything and scroll.
+ */
+@media (max-width: 700px), (orientation: portrait) and (max-width: 1180px) {
   .app { flex-direction: column; }
-  .game-pane { width: 100%; }
-  .editor-pane { min-height: 60vh; }
+  .editor-pane { flex: 1; min-height: 0; }
+  .game-pane {
+    /* The game's column is as wide as fits: under half the width, and short enough for the run buttons too. */
+    width: 100%; max-height: 36vh; display: grid;
+    grid-template-columns: minmax(0, min(46%, calc((36vh - 44px) * 16 / 9))) minmax(0, 1fr);
+    grid-auto-rows: min-content; column-gap: 10px; row-gap: 6px;
+  }
+  .game-pane > * { grid-column: 1; }
+  .game-pane > .game-toolbar { grid-column: 1 / -1; }
+  .game-pane > .tutorial-panel { grid-column: 2; grid-row: 2 / span 20; max-height: calc(36vh - 40px); min-height: 0; }
+  .game-help { display: none; }
+  .app.expanded .game-pane { display: flex; max-height: none; }
   .project-name input { width: 140px; }
 }
+@media (max-width: 599px) {
+  .app { overflow-y: auto; }
+  .editor-pane { flex: none; min-height: 60vh; }
+  .game-pane { display: flex; max-height: none; }
+  .game-pane > .tutorial-panel { max-height: none; }
+}
 
-/* Tablets: a smaller game and instructions, so the block workspace gets most of the screen. */
-body.tablet { --game-w: 330px; }
+/* Tablets: a smaller game and tighter instructions; the layout above handles upright screens. */
+body.tablet { --game-w: clamp(300px, 30vw, 330px); }
 body.tablet .game-help { display: none; }
 body.tablet .tutorial-panel { font-size: 14px; line-height: 1.4; padding: 10px 12px; max-height: 40vh; }
 body.tablet .tutorial-panel h2 { font-size: 16px; }
-/* Upright tablets: the blocks fill the top, with the game and the instructions side by side underneath. */
-@media (orientation: portrait) {
-  body.tablet .app { flex-direction: column; }
-  body.tablet .editor-pane { flex: 1; min-height: 0; }
-  body.tablet .game-pane {
-    width: 100%; max-height: 34vh; display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 1fr);
-    grid-auto-rows: min-content; column-gap: 10px; row-gap: 6px;
-  }
-  body.tablet .game-pane > * { grid-column: 1; }
-  body.tablet .game-pane > .tutorial-panel { grid-column: 2; grid-row: 1 / span 20; max-height: 34vh; min-height: 0; }
-  body.tablet .app.expanded .game-pane { display: flex; max-height: none; }
-}
 
 /* ---------------------------------------------------------------- sprites tab */
 
@@ -516,11 +529,29 @@ body[data-mode='tutorial'] #save-state { display: none; }
 .step-dot.current { border-color: #ffd34d; box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.35); }
 .step-dot.locked { opacity: 0.45; cursor: not-allowed; }
 .tutorial-bar .btn:disabled { opacity: 0.45; }
+.menu { position: relative; }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; min-width: 190px; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(31, 42, 61, 0.2);
+}
+.menu-list[hidden] { display: none; }
+.menu-item {
+  font: inherit; font-size: 14px; text-align: left; border: none; background: none; color: var(--text);
+  padding: 8px 10px; border-radius: 6px; cursor: pointer;
+}
+.menu-item:hover, .menu-item:focus-visible { background: #eef2f8; outline: none; }
+/* Narrow headers: drop the tutorial's name, then the app's name (the logo stays). */
+@media (max-width: 1000px) { .tutorial-title { display: none; } }
+@media (max-width: 760px) { body[data-mode='tutorial'] .brand-name { display: none; } }
 
 .tutorial-panel {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
   font-size: 15px; line-height: 1.45; max-height: 45vh; overflow: auto;
+  /* In a short window the instructions give way (and scroll), not the game. */
+  flex: 0 1 auto; min-height: 80px;
 }
+@media (max-height: 700px) { .game-help { display: none; } }
 .tutorial-panel h2 { font-size: 17px; margin: 0 0 6px; }
 .tutorial-panel p { margin: 0 0 6px; }
 .tutorial-steps { margin: 0 0 8px; padding-left: 22px; }

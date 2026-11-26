@@ -39,14 +39,16 @@ function refreshMainToolbox(): void {
   else main.updateToolbox(mainToolbox(main));
 }
 
+/** Narrow windows and tablets start a little zoomed out, so more blocks (and the block list) fit. */
+const defaultScale = () => (isTablet() || window.innerWidth < 1200 ? 0.72 : 0.9);
+
 const workspaceOptions = (toolbox: Blockly.utils.toolbox.ToolboxDefinition): Blockly.BlocklyOptions => ({
   toolbox,
   theme,
   renderer: 'thrasos',
   trashcan: true,
   sounds: false,
-  // Tablets start a little zoomed out, so more of the blocks fit beside the smaller game.
-  zoom: { controls: true, wheel: true, startScale: isTablet() ? 0.72 : 0.9, maxScale: 2, minScale: 0.3, scaleSpeed: 1.15 },
+  zoom: { controls: true, wheel: true, startScale: defaultScale(), maxScale: 2, minScale: 0.3, scaleSpeed: 1.15 },
   move: { scrollbars: true, drag: true, wheel: false },
   grid: { spacing: 24, length: 2, colour: '#dde1ea', snap: false },
 });
@@ -80,6 +82,15 @@ export function initWorkspaces(
     mainToolbox = toolboxes.main;
     pathsToolbox = toolboxes.paths;
   }
+
+  // Resizing across the narrow-window width moves the zoom along, unless the learner has zoomed themselves.
+  let lastScale = defaultScale();
+  window.addEventListener('resize', () => {
+    const next = defaultScale();
+    if (next === lastScale) return;
+    for (const ws of [main, paths]) if (Math.abs(ws.scale - lastScale) < 0.001) ws.setScale(next);
+    lastScale = next;
+  });
 
   main.addChangeListener(Blockly.Events.disableOrphans);
   paths.addChangeListener(Blockly.Events.disableOrphans);

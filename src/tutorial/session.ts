@@ -217,24 +217,46 @@ export class TutorialSession {
       title: this.passed() ? '' : 'Pass every check to go on',
     });
     next.addEventListener('click', () => (last ? this.celebrate() : this.open(this.index + 1)));
-    const reset = el('button', { className: 'btn', type: 'button', textContent: 'Start over', title: 'Start this tutorial from the beginning' });
-    reset.addEventListener('click', () => this.reset());
-    const exportBtn = el('button', { className: 'btn', type: 'button', textContent: 'Export progress' });
-    exportBtn.addEventListener('click', () => {
-      this.save(this.hooks.currentProject());
-      exportProgress(this.tutorial.id, this.tutorial.title, this.progress);
+    // Less frequent actions share one menu, so the bar fits narrow windows.
+    const item = (label: string, title: string, action: () => void) => {
+      const b = el('button', { className: 'menu-item', type: 'button', textContent: label, title, role: 'menuitem' });
+      b.addEventListener('click', () => {
+        close();
+        action();
+      });
+      return b;
+    };
+    const list = el('div', { className: 'menu-list', role: 'menu', hidden: true }, [
+      item('Start over', 'Start this tutorial from the beginning', () => void this.reset()),
+      item('Export progress', 'Save your work in every step to a file', () => {
+        this.save(this.hooks.currentProject());
+        exportProgress(this.tutorial.id, this.tutorial.title, this.progress);
+      }),
+      item('Import progress', 'Load work saved with Export progress', () => void this.importProgress()),
+    ]);
+    const toggle = el('button', { className: 'btn', type: 'button', textContent: 'Progress ▾', ariaHasPopup: 'menu' });
+    const onOutside = (e: PointerEvent) => {
+      if (!menu.contains(e.target as Node)) close();
+    };
+    const close = () => {
+      list.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('pointerdown', onOutside);
+    };
+    toggle.addEventListener('click', () => {
+      if (!list.hidden) return close();
+      list.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      document.addEventListener('pointerdown', onOutside);
     });
-    const importBtn = el('button', { className: 'btn', type: 'button', textContent: 'Import progress' });
-    importBtn.addEventListener('click', () => this.importProgress());
+    const menu = el('div', { className: 'menu' }, [toggle, list]);
     this.bar.replaceChildren(
       el('span', { className: 'tutorial-title', textContent: this.tutorial.title }),
       back,
       el('div', { className: 'step-dots', role: 'group', ariaLabel: 'Tutorial steps' }, dots),
       next,
       el('span', { className: 'spacer' }),
-      reset,
-      exportBtn,
-      importBtn,
+      menu,
     );
   }
 
